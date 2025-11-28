@@ -1,0 +1,47 @@
+# Build results
+bin
+obj
+out
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio
+.vs
+.vscode
+.idea
+
+# Test results
+[Tt]est[Rr]esult*
+[Bb]uild[Ll]og.*
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+**/packages/*
+
+# Visual Studio cache files
+*.vsidx
+*.vspscc
+*.vsp
+
+# Environment files
+.env
+.env*.local
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Git
+.git
+.gitignore
+
+# Logs
+*.log
+
+

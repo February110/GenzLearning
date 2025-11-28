@@ -1,0 +1,80 @@
+###############################################################################
+# Root .gitignore for multi-project repo (.NET API + Next.js web)
+# Applies repo-wide; project-level .gitignore files still take effect.
+###############################################################################
+
+### OS / File system
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+ehthumbs.db
+
+### IDE / Editors
+.vscode/
+.idea/
+*.code-workspace
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.sw?
+
+### Logs / Temp
+logs/
+*.log
+*.pid
+*.pid.lock
+*.seed
+.tmp/
+tmp/
+
+### Node.js / Next.js (covers nested workspaces)
+**/node_modules/
+**/.next/
+**/.turbo/
+**/.vercel/
+**/out/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+### .NET / Visual Studio
+.vs/
+[Bb]in/
+[Oo]bj/
+*.obj
+*.pdb
+*.mdb
+*.cache
+*.ipch
+*.aps
+*.nupkg
+packages/
+TestResult*/
+
+### Environment files (keep class_web/.env.local if intentionally tracked)
+.env
+.env.*
+!.env.example
+!**/.env.example
+!class_web/.env.local
+
+### Coverage / Build outputs
+coverage/
+dist/
+build/
+
+### Docker / Compose
+**/.docker/
+**/.dockerignore.local
+
+seed/.seeded
+.seeded
+
+# Local appsettings overrides (secrets)
+class_api/appsettings.Docker.json
+class_api/appsettings.Development.json
+class_worker/appsettings.Docker.json
+class_worker/appsettings.Development.json

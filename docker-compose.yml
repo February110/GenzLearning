@@ -1,0 +1,143 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: class_sql
+    environment:
+      SA_PASSWORD: ${SA_PASSWORD:-YourStrong_Passw0rd}
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+      - ./seed:/seed:ro
+    networks:
+      - class_network
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ${SA_PASSWORD:-YourStrong_Passw0rd} -C -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  class_api:
+    build:
+      context: .
+      dockerfile: class_api/Dockerfile
+    container_name: class_api
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      dbseed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    ports:
+      - "5081:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=Class_Db;User Id=sa;Password=${SA_PASSWORD:-YourStrong_Passw0rd};TrustServerCertificate=True;"
+      ConnectionStrings__Redis: "redis:6379"
+      Redis__InstanceName: "class:"
+      Redis__OverviewCacheSeconds: "60"
+      Redis__ActivityFeedKey: "activity:feed"
+      Redis__ActivityFeedLimit: "200"
+      RabbitMQ__HostName: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__UserName: guest
+      RabbitMQ__Password: guest
+      RabbitMQ__QueueName: notifications
+      WorkerAuth__ApiKey: "${WORKER_KEY:-please-set-worker-key}"
+    networks:
+      - class_network
+    restart: unless-stopped
+
+  class_web:
+    build:
+      context: ./class_web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5081/api}
+        API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://class_api:8080/api}
+    container_name: class_web
+    depends_on:
+      - class_api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5081/api}
+      - API_INTERNAL_BASE_URL=${API_INTERNAL_BASE_URL:-http://class_api:8080/api}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-please-change-me}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - FACEBOOK_CLIENT_ID=${FACEBOOK_CLIENT_ID:-}
+      - FACEBOOK_CLIENT_SECRET=${FACEBOOK_CLIENT_SECRET:-}
+    networks:
+      - class_network
+    restart: unless-stopped
+
+  dbseed:
+    image: mcr.microsoft.com/mssql-tools:latest
+    container_name: class_dbseed
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    volumes:
+      - ./seed:/seed
+    networks:
+      - class_network
+    entrypoint: /bin/sh -c "if [ ! -f /seed/.seeded ]; then /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P ${SA_PASSWORD:-YourStrong_Passw0rd} -Q \"IF DB_ID('Class_Db') IS NOT NULL BEGIN ALTER DATABASE Class_Db SET SINGLE_USER WITH ROLLBACK IMMEDIATE; END; RESTORE DATABASE Class_Db FROM DISK = '/seed/Class_Db.bak' WITH REPLACE, MOVE 'Class_Db' TO '/var/opt/mssql/data/Class_Db.mdf', MOVE 'Class_Db_log' TO '/var/opt/mssql/data/Class_Db_log.ldf'; ALTER DATABASE Class_Db SET MULTI_USER;\" && touch /seed/.seeded; else echo 'Seed already applied'; fi"
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    container_name: class_redis
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    networks:
+      - class_network
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: class_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - class_network
+    restart: unless-stopped
+
+  class_worker:
+    build:
+      context: .
+      dockerfile: class_worker/Dockerfile
+    container_name: class_worker
+    depends_on:
+      rabbitmq:
+        condition: service_started
+      class_api:
+        condition: service_started
+    environment:
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - RabbitMQ__QueueName=notifications
+      - Api__BaseUrl=http://class_api:8080
+      - Api__WorkerKey=${WORKER_KEY:-please-set-worker-key}
+    networks:
+      - class_network
+    restart: unless-stopped
+
+volumes:
+  sql_data:
+  redis_data:
+
+networks:
+  class_network:
+    driver: bridge
