@@ -74,10 +74,12 @@ namespace class_api.Controllers
             }
 
             await _db.SaveChangesAsync(ct);
+            var studentName = sub.User?.FullName ?? "học viên";
+            var className = sub.Assignment?.Title ?? string.Empty;
             await _activityStream.PublishAsync(new ActivityEvent("grade",
                 member.User?.FullName ?? "Giáo viên",
-                $"chấm {sub.User?.FullName ?? "học viên"} {dto.Grade} điểm",
-                sub.Assignment?.Title,
+                $"chấm {studentName} {dto.Grade} điểm",
+                className,
                 DateTime.UtcNow));
             return Ok(new
             {

@@ -148,36 +148,36 @@ export default function AdminTopbar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950 px-4 md:px-6 h-16">
-      <div className="h-full flex items-center justify-between gap-3">
+    <header className="sticky top-0 z-20 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/95 dark:bg-slate-900/85 px-4 md:px-6 h-16">
+      <div className="h-full flex items-center justify-between gap-3 text-slate-900 dark:text-slate-100">
         {/* Title */}
         <div className="min-w-0">
-          <div className="text-xl font-semibold leading-tight text-gray-900 dark:text-gray-100">{pageTitle}</div>
+          <div className="text-xl font-semibold leading-tight">{pageTitle}</div>
           {pageSubtitle && (
-            <div className="text-xs text-gray-500 -mt-0.5">{pageSubtitle}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 -mt-0.5">{pageSubtitle}</div>
           )}
         </div>
 
         <div className="flex items-center gap-2">
           {/* Smaller search on the right */}
           <div className="relative hidden md:block w-64 mr-2">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               placeholder="Search"
-              className="w-full rounded-full bg-gray-100 dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 focus:border-gray-300 outline-none pl-9 pr-3 py-2 text-sm text-gray-700 dark:text-gray-200"
+              className="w-full rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-slate-300 outline-none pl-9 pr-3 py-2 text-sm text-slate-700 dark:text-slate-200"
             />
           </div>
         <button
           aria-label="Toggle Theme"
           onClick={() => setTheme(isDark ? "light" : "dark")}
-          className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+          className="rounded-full p-2 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
         >
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
         <div ref={notifRef} className="relative">
           <button
             aria-label="Notifications"
-            className="relative rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+            className="relative rounded-full p-2 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
             onClick={() => setNotifOpen((v) => !v)}
           >
             <Bell size={18} />
@@ -188,23 +188,23 @@ export default function AdminTopbar() {
             )}
           </button>
           {notifOpen && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-800">
+            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-slate-800">
                 <div>
-                  <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Thông báo</div>                </div>
+                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Thông báo</div>                </div>
                 <button
                   onClick={handleMarkAllRead}
-                  className={`text-xs font-medium ${unread === 0 ? "text-gray-300 cursor-not-allowed" : "text-indigo-600 hover:text-indigo-500"}`}
+                  className={`text-xs font-medium ${unread === 0 ? "text-slate-300 cursor-not-allowed" : "text-indigo-600 hover:text-indigo-500"}`}
                   disabled={unread === 0}
                 >
                   Đánh dấu tất cả đọc
                 </button>
               </div>
-              <div className="max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
+              <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                 {notifLoading ? (
-                  <div className="p-4 text-sm text-gray-500">Đang tải...</div>
+                  <div className="p-4 text-sm text-slate-500">Đang tải...</div>
                 ) : notifications.length === 0 ? (
-                  <div className="p-4 text-sm text-gray-500">Hiện chưa có thông báo.</div>
+                  <div className="p-4 text-sm text-slate-500">Hiện chưa có thông báo.</div>
                 ) : (
                     (showAllNotifications ? notifications : notifications.slice(0, 5)).map((item) => {
                     const created = toVietnamTime(item.createdAt);
@@ -214,15 +214,15 @@ export default function AdminTopbar() {
                       <button
                         key={item.id}
                         onClick={() => handleNotificationClick(item)}
-                        className={`flex w-full gap-3 px-3 py-3 text-left transition-colors ${item.isRead ? "bg-transparent hover:bg-gray-50 dark:hover:bg-gray-900/70" : "bg-indigo-50/70 dark:bg-indigo-950/30"}`}
+                        className={`flex w-full gap-3 px-3 py-3 text-left transition-colors ${item.isRead ? "bg-transparent hover:bg-slate-50 dark:hover:bg-slate-900/70" : "bg-indigo-50/70 dark:bg-indigo-950/30"}`}
                       >
                         <div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-full text-sm ${accent} dark:text-indigo-300 dark:bg-indigo-950/50`}>
                           {notificationIcon(item.type)}
                         </div>
                         <div className="flex-1">
-                          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stripHtml(item.title)}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{messageText || "—"}</div>
-                          <div className="mt-1 text-[11px] text-gray-400">
+                          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{stripHtml(item.title)}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">{messageText || "—"}</div>
+                          <div className="mt-1 text-[11px] text-slate-400">
                             {created.format("HH:mm DD/MM")} • {created.fromNow()}
                           </div>
                         </div>

@@ -37,6 +37,8 @@ export default function ClassroomsPage() {
     try {
       const { data } = await api.get("/classrooms");
       setClasses(data);
+      // Notify listeners (sidebar) with fresh data
+      window.dispatchEvent(new CustomEvent("classrooms:updated", { detail: data }));
     } catch (err) {
       console.error(err);
       toast.error("Không tải được danh sách lớp học");
@@ -54,7 +56,8 @@ export default function ClassroomsPage() {
       setCreateData({ name: "", description: "", section: "", room: "", schedule: "" });
       load();
     } catch (err: any) {
-      toast.error(err.response?.data || "Lỗi khi tạo lớp học");
+      const message = err?.response?.data?.message || err?.message || "Lỗi khi tạo lớp học";
+      toast.error(message);
     }
   }
 
@@ -67,7 +70,8 @@ export default function ClassroomsPage() {
       setInviteCode("");
       load();
     } catch (err: any) {
-      toast.error(err.response?.data || "Mã mời không hợp lệ");
+      const message = err?.response?.data?.message || err?.message || "Mã mời không hợp lệ";
+      toast.error(message);
     }
   }
 
@@ -257,7 +261,7 @@ export default function ClassroomsPage() {
 
       {/* Modal tạo lớp */}
       {showCreate && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40 px-4">
+        <div className="fixed inset-0 flex items-center justify-center bg-slate-900/55 dark:bg-slate-950/70 px-4 z-50">
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl shadow-xl w-full max-w-lg relative border border-gray-200 dark:border-gray-800">
             <div className="mb-5">
               <h2 className="text-2xl font-semibold">Tạo lớp học mới</h2>
@@ -341,7 +345,7 @@ export default function ClassroomsPage() {
 
       {/* Modal tham gia lớp */}
       {showJoin && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 flex items-center justify-center bg-slate-900/55 dark:bg-slate-950/70 z-50">
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl shadow-xl w-full max-w-md relative border border-gray-200 dark:border-gray-800">
             <h2 className="text-xl font-semibold mb-4">
               Nhập mã mời lớp học

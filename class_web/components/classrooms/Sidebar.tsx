@@ -37,12 +37,28 @@ export default function ClassroomSidebar() {
   const pathname = usePathname();
 
   useEffect(() => {
-    setLoading(true);
-    api
-      .get("/classrooms")
-      .then(({ data }) => setClasses(data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const fetchClasses = () => {
+      setLoading(true);
+      api
+        .get("/classrooms")
+        .then(({ data }) => setClasses(data))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    };
+
+    fetchClasses();
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent;
+      const data = custom.detail;
+      if (Array.isArray(data)) {
+        setClasses(data);
+        setLoading(false);
+      } else {
+        fetchClasses();
+      }
+    };
+    window.addEventListener("classrooms:updated", handler);
+    return () => window.removeEventListener("classrooms:updated", handler);
   }, []);
 
   const teachClasses = useMemo(() => classes.filter((c) => c.role === "Teacher"), [classes]);

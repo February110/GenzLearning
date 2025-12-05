@@ -46,27 +46,41 @@ export default function AnnouncementModal({ classroomId, onClose }: { classroomI
 
       const html = (content || "").trim();
       if (!html) { setLoading(false); return; }
-      const fd = new FormData();
-      fd.append("ClassroomId", classroomId);
-      fd.append("Content", html);
-      fd.append("AllStudents", String(all));
-      if (!all && targetIds.length) fd.append("UserIds", JSON.stringify(targetIds));
-      files.forEach((f) => fd.append("Files", f));
-      if (links.length) fd.append("Links", JSON.stringify(links));
 
-      setProgress(0);
-      const { data } = await api.post("/announcements", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (e: ProgressEvent) => {
-          if (!e.total) return;
-          const pct = Math.round((e.loaded / e.total) * 100);
-          setProgress(pct);
-        },
-      } as any);
+      const hasUploads = files.length > 0 || links.length > 0;
+
+      let resp;
+      if (hasUploads) {
+        // multipart -> /announcements/with-materials
+        const fd = new FormData();
+        fd.append("ClassroomId", classroomId);
+        fd.append("Content", html);
+        fd.append("AllStudents", String(all));
+        if (!all && targetIds.length) fd.append("UserIds", JSON.stringify(targetIds));
+        files.forEach((f) => fd.append("Files", f));
+        if (links.length) fd.append("Links", JSON.stringify(links));
+
+        setProgress(0);
+        resp = await api.post("/announcements/with-materials", fd, {
+          onUploadProgress: (ev: ProgressEvent) => {
+            if (!ev.total) return;
+            const pct = Math.round((ev.loaded / ev.total) * 100);
+            setProgress(pct);
+          },
+        } as any);
+      } else {
+        // simple JSON -> /announcements
+        resp = await api.post("/announcements", {
+          ClassroomId: classroomId,
+          Content: html,
+          AllStudents: all,
+          UserIds: all ? [] : targetIds,
+        });
+      }
 
       try {
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('announcement:created', { detail: data }));
+          window.dispatchEvent(new CustomEvent('announcement:created', { detail: resp.data }));
         }
       } catch {}
       toast.success("Đã đăng thông báo");

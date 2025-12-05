@@ -51,6 +51,7 @@ export default function ClassroomDetailPage() {
   const [activeMeeting, setActiveMeeting] = useState<any | null>(null);
   const [meetingBusy, setMeetingBusy] = useState(false);
   const [meetingHistory, setMeetingHistory] = useState<any[]>([]);
+  const [meetingSupported, setMeetingSupported] = useState(true);
   const [mySubmissions, setMySubmissions] = useState<Record<string, any>>({});
 
   const normalizeMeeting = (payload: any) => {
@@ -105,9 +106,7 @@ export default function ClassroomDetailPage() {
     const html = aiResults
       .map((q: any, idx: number) => {
         const opts = (q.options || q.Options || []).map((o: string) => `<li>${o}</li>`).join("");
-        const ans = q.answer || q.Answer || "";
-        const exp = q.explanation || q.Explanation || "";
-        return `<p><strong>Câu ${idx + 1}:</strong> ${q.question || q.Question || ""}</p><ul>${opts}</ul><p><em>Đáp án:</em> ${ans}${exp ? ` — ${exp}` : ""}</p>`;
+        return `<p><strong>Câu ${idx + 1}:</strong> ${q.question || q.Question || ""}</p><ul>${opts}</ul>`;
       })
       .join("<hr />");
     setForm((prev) => ({ ...prev, instructions: (prev.instructions || "") + "<br/>" + html }));
@@ -207,19 +206,21 @@ export default function ClassroomDetailPage() {
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {};
 
   const fetchActiveMeeting = useCallback(async () => {
-    if (!classroomId) return;
+    if (!classroomId || !meetingSupported) return;
     try {
       const { data } = await api.get(`/meetings/classrooms/${classroomId}/active`);
       setActiveMeeting(normalizeMeeting(data));
     } catch (err: any) {
-      if (err?.response?.status === 404) {
+      const status = err?.response?.status;
+      if (status === 404) {
         setActiveMeeting(null);
+        setMeetingSupported(false);
       }
     }
-  }, [classroomId]);
+  }, [classroomId, meetingSupported]);
 
   const fetchMeetingHistory = useCallback(async () => {
-    if (!classroomId) return;
+    if (!classroomId || !meetingSupported) return;
     try {
       const { data } = await api.get(`/meetings/classrooms/${classroomId}/history`);
       if (Array.isArray(data)) {
@@ -227,14 +228,18 @@ export default function ClassroomDetailPage() {
       } else {
         setMeetingHistory([]);
       }
-    } catch {
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        setMeetingSupported(false);
+      }
       setMeetingHistory([]);
     }
-  }, [classroomId]);
+  }, [classroomId, meetingSupported]);
 
   const refreshMeetingState = useCallback(async () => {
+    if (!meetingSupported) return;
     await Promise.all([fetchActiveMeeting(), fetchMeetingHistory()]);
-  }, [fetchActiveMeeting, fetchMeetingHistory]);
+  }, [fetchActiveMeeting, fetchMeetingHistory, meetingSupported]);
 
   async function refresh() {
     try {
@@ -288,15 +293,15 @@ export default function ClassroomDetailPage() {
   useEffect(() => {
     if (!classroomId) return;
     const onFocus = () => refresh();
-    const timer = setInterval(() => refresh(), 5000);
+    const timer = meetingSupported ? setInterval(() => refresh(), 5000) : null;
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
     return () => {
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
     };
-  }, [classroomId]);
+  }, [classroomId, meetingSupported]);
 
   useClassroomRealtime(classroomId, {
     onMemberJoined: (p: any) => {
@@ -374,15 +379,26 @@ export default function ClassroomDetailPage() {
     if (creating) return;
     try {
       setCreating(true);
-      const fd = new FormData();
-      fd.append("ClassroomId", String(classroomId));
-      fd.append("Title", form.title.trim());
-      if (form.instructions) fd.append("Instructions", form.instructions);
-      if (form.dueAt) fd.append("DueAt", new Date(form.dueAt).toISOString());
-      fd.append("MaxPoints", String(Number(form.maxPoints) || 100));
-      attachFiles.forEach((f) => fd.append("Files", f));
-      if (links.length) fd.append("Links", JSON.stringify(links));
-      const res = await api.post("/assignments", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const hasUploads = attachFiles.length > 0 || links.length > 0;
+      if (hasUploads) {
+        const fd = new FormData();
+        fd.append("ClassroomId", String(classroomId));
+        fd.append("Title", form.title.trim());
+        if (form.instructions) fd.append("Instructions", form.instructions);
+        if (form.dueAt) fd.append("DueAt", new Date(form.dueAt).toISOString());
+        fd.append("MaxPoints", String(Number(form.maxPoints) || 100));
+        attachFiles.forEach((f) => fd.append("Files", f));
+        if (links.length) fd.append("Links", JSON.stringify(links));
+        await api.post("/assignments/with-materials", fd);
+      } else {
+        await api.post("/assignments", {
+          ClassroomId: String(classroomId),
+          Title: form.title.trim(),
+          Instructions: form.instructions || undefined,
+          DueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
+          MaxPoints: Number(form.maxPoints) || 100,
+        });
+      }
 
       setShowCreate(false);
       toast.success("Đã tạo bài tập");

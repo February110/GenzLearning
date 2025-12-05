@@ -482,7 +482,7 @@ namespace class_api.Controllers
             };
             _db.Assignments.Add(assignment);
             await _db.SaveChangesAsync();
-            await PublishActivity("assignment", classroom.Teacher?.FullName ?? "Giáo viên", $"tạo bài tập \"{assignment.Title}\"", classroom.Name);
+            await PublishActivity("assignment", classroom.Teacher?.FullName ?? "Giáo viên", $"tạo bài tập \"{assignment.Title}\"", classroom.Name ?? string.Empty);
 
             var studentIds = await _db.Enrollments
                 .Where(e => e.ClassroomId == classroom.Id && e.Role == "Student")
@@ -513,7 +513,7 @@ namespace class_api.Controllers
             await PublishActivity("assignment",
                 assignment.Classroom?.Teacher?.FullName ?? "Admin",
                 $"cập nhật bài tập \"{assignment.Title}\"",
-                assignment.Classroom?.Name);
+                assignment.Classroom?.Name ?? string.Empty);
             return Ok(new { assignment.Id, assignment.Title });
         }
 
@@ -531,7 +531,7 @@ namespace class_api.Controllers
             await PublishActivity("assignment",
                 assignment.Classroom?.Teacher?.FullName ?? "Admin",
                 $"xoá bài tập \"{assignment.Title}\"",
-                assignment.Classroom?.Name);
+                assignment.Classroom?.Name ?? string.Empty);
             return NoContent();
         }
 

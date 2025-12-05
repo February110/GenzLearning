@@ -43,7 +43,8 @@ builder.Services.AddControllers().AddJsonOptions(o =>
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
+var jwtKeyConfig = builder.Configuration["Jwt:Key"] ?? string.Empty;
+var key = Encoding.UTF8.GetBytes(jwtKeyConfig);
 
 builder.Services.AddSignalR();
 builder.Services.AddHttpClient();
@@ -73,7 +74,7 @@ builder.Services.Configure<WorkerAuthOptions>(builder.Configuration.GetSection("
 builder.Services.AddAuthentication("Bearer")
    .AddJwtBearer(opt =>
    {
-       var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
+       var key = Encoding.UTF8.GetBytes(jwtKeyConfig);
        opt.TokenValidationParameters = new TokenValidationParameters
        {
            ValidateIssuer = true,

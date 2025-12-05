@@ -157,8 +157,8 @@ namespace class_api.Controllers
             await _db.SaveChangesAsync(ct);
             await _activityStream.PublishAsync(new ActivityEvent("submission",
                 user?.FullName ?? _currentUser.Email,
-                $"nộp \"{assignment.Title}\"",
-                assignment.Classroom?.Name,
+                $"nộp \"{assignment!.Title}\"",
+                assignment.Classroom?.Name ?? assignment.ClassroomId.ToString(),
                 DateTime.UtcNow));
             return Ok(new { message = "Đã nộp nhiều tệp.", items = results });
         }

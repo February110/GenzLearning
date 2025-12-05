@@ -136,7 +136,7 @@ export default function AdminClassesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-semibold">Classes</h1>
+          <h1 className="text-xl md:text-2xl font-semibold">Lớp học</h1>
           <p className="text-sm text-gray-500">Tạo / cập nhật lớp học và giáo viên phụ trách.</p>
         </div>
         <input

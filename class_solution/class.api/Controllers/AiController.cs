@@ -16,6 +16,7 @@ namespace class_api.Controllers
             _httpClientFactory = httpClientFactory;
             _cfg = cfg;
         }
+
         public record QuizRequest(string Content, int? Count = null, string? Language = "vi");
         public record QuizItem(string Question, List<string> Options, string Answer, string? Explanation);
         public record QuizResponse(List<QuizItem> Items);
@@ -82,12 +83,23 @@ Nội dung nguồn (có thể đã được rút gọn nếu quá dài):
                 ct
             );
 
+            var raw = await httpResp.Content.ReadAsStringAsync(ct);
+
             if (!httpResp.IsSuccessStatusCode)
             {
-                return StatusCode((int)httpResp.StatusCode, new { message = "Gọi Gemini API thất bại" });
-            }
+                string? errMsg = null;
+                try
+                {
+                    using var errDoc = JsonDocument.Parse(raw);
+                    errMsg = errDoc.RootElement.GetProperty("error").GetProperty("message").GetString();
+                }
+                catch { }
 
-            var raw = await httpResp.Content.ReadAsStringAsync(ct);
+                return StatusCode((int)httpResp.StatusCode, new
+                {
+                    message = errMsg ?? "Gọi Gemini API thất bại"
+                });
+            }
 
             using var doc = JsonDocument.Parse(raw);
             var text = doc.RootElement
@@ -99,9 +111,7 @@ Nội dung nguồn (có thể đã được rút gọn nếu quá dài):
 
             if (string.IsNullOrWhiteSpace(text))
                 return StatusCode(500, new { message = "Phản hồi rỗng từ Gemini." });
-
             text = text.Trim();
-
             if (text.StartsWith("```"))
             {
                 var firstNewLine = text.IndexOf('\n');
@@ -111,12 +121,9 @@ Nội dung nguồn (có thể đã được rút gọn nếu quá dài):
                     text = text.Substring(firstNewLine + 1, lastFence - firstNewLine - 1).Trim();
                 }
             }
-
             var firstBrace = text.IndexOfAny(new[] { '{', '[' });
             if (firstBrace > 0)
-            {
                 text = text.Substring(firstBrace);
-            }
 
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 

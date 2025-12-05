@@ -28,6 +28,14 @@ namespace class_api.Controllers
             _db = db; _me = me; _storage = storage; _hub = hub; _activityStream = activityStream; _dispatcher = dispatcher;
         }
 
+        private static string Slugify(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "untitled";
+            var cleaned = new string(input.Trim().Select(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_' ? ch : '-').ToArray());
+            while (cleaned.Contains("--")) cleaned = cleaned.Replace("--", "-");
+            return cleaned.Trim('-').ToLowerInvariant();
+        }
+
         [HttpPost]
         [Consumes("application/json")]
         public async Task<IActionResult> Create(CreateAssignmentDto dto)
@@ -65,13 +73,20 @@ namespace class_api.Controllers
             await _activityStream.PublishAsync(new ActivityEvent("assignment",
                 member.User?.FullName ?? "Giáo viên",
                 $"tạo bài tập \"{a.Title}\"",
-                member.Classroom?.Name,
+                member.Classroom?.Name ?? string.Empty,
                 DateTime.UtcNow));
 
             var studentRecipients = await GetStudentIds(dto.ClassroomId);
             if (studentRecipients.Any())
             {
-                await _dispatcher.DispatchAsync(studentRecipients, "Bài tập mới", $"\"{a.Title}\" vừa được đăng.", "assignment", dto.ClassroomId, a.Id);
+                try
+                {
+                    await _dispatcher.DispatchAsync(studentRecipients, "Bài tập mới", $"\"{a.Title}\" vừa được đăng.", "assignment", dto.ClassroomId, a.Id);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Dispatch assignment notification failed: {ex.Message}");
+                }
             }
 
             return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints });
@@ -116,7 +131,7 @@ namespace class_api.Controllers
             await _db.SaveChangesAsync(ct);
 
             // Upload materials right away under materials/{id}
-            var prefix = $"materials/{a.Id}";
+            var prefix = $"materials/{Slugify(a.Title)}-{a.Id.ToString()[..8]}";
             var items = new List<object>();
             if (Files != null)
             {
@@ -155,13 +170,20 @@ namespace class_api.Controllers
             await _activityStream.PublishAsync(new ActivityEvent("assignment",
                 member.User?.FullName ?? "Giáo viên",
                 $"tạo bài tập \"{a.Title}\"",
-                member.Classroom?.Name,
+                member.Classroom?.Name ?? string.Empty,
                 DateTime.UtcNow));
 
             var studentIds = await GetStudentIds(ClassroomId);
             if (studentIds.Any())
             {
-                await _dispatcher.DispatchAsync(studentIds, "Bài tập mới", $"\"{a.Title}\" vừa được đăng.", "assignment", ClassroomId, a.Id);
+                try
+                {
+                    await _dispatcher.DispatchAsync(studentIds, "Bài tập mới", $"\"{a.Title}\" vừa được đăng.", "assignment", ClassroomId, a.Id);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Dispatch assignment notification failed: {ex.Message}");
+                }
             }
 
             return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints });
@@ -204,7 +226,7 @@ namespace class_api.Controllers
             var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == a.ClassroomId && e.UserId == _me.UserId, ct);
             if (member == null || member.Role != "Teacher") return Forbid();
 
-            var prefix = $"materials/{id}";
+            var prefix = $"materials/{Slugify(a.Title)}-{a.Id.ToString()[..8]}";
             var results = new List<object>();
 
             if (files != null)
@@ -233,36 +255,37 @@ namespace class_api.Controllers
             return Ok(new { items = results });
         }
 
-        // List materials for assignment
-        [HttpGet("{id:guid}/materials")]
-        public async Task<IActionResult> ListMaterials(Guid id, CancellationToken ct)
-        {
-            var a = await _db.Assignments.FirstOrDefaultAsync(x => x.Id == id, ct);
-            if (a == null) return NotFound();
-            var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == a.ClassroomId && e.UserId == _me.UserId, ct);
-            if (member == null) return Forbid();
-
-            var prefix = $"materials/{id}";
-            var blobs = await _storage.ListAsync(prefix, ct);
-            var items = blobs
-                .Where(b => !b.key.EndsWith("links.json", StringComparison.OrdinalIgnoreCase))
-                .Select(b => new { key = b.key, size = b.sizeBytes, url = _storage.GetTemporaryUrl(b.key), name = System.IO.Path.GetFileName(b.key) })
-                .ToList();
-
-            // read links.json if present
-            var linkJson = await _storage.ReadTextAsync($"{prefix}/links.json", ct);
-            if (!string.IsNullOrWhiteSpace(linkJson))
+            // List materials for assignment
+            [HttpGet("{id:guid}/materials")]
+            public async Task<IActionResult> ListMaterials(Guid id, CancellationToken ct)
             {
-                try
-                {
-                    var arr = JsonSerializer.Deserialize<List<string>>(linkJson) ?? new List<string>();
-                    items.AddRange(arr.Select(u => new { key = (string?)null, size = 0L, url = u, name = u }));
-                }
-                catch { }
-            }
+                var a = await _db.Assignments.FirstOrDefaultAsync(x => x.Id == id, ct);
+                if (a == null) return NotFound();
+                var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == a.ClassroomId && e.UserId == _me.UserId, ct);
+                if (member == null) return Forbid();
 
-            return Ok(items);
+                var prefix = $"materials/{Slugify(a.Title)}-{a.Id.ToString()[..8]}";
+                var blobs = await _storage.ListAsync(prefix, ct);
+                var items = blobs
+                    .Where(b => !b.key.EndsWith("links.json", StringComparison.OrdinalIgnoreCase))
+                    .Select(b => new { key = b.key, size = b.sizeBytes, url = _storage.GetTemporaryUrl(b.key), name = System.IO.Path.GetFileName(b.key) })
+                    .ToList();
+
+                // read links.json if present
+                var linkJson = await _storage.ReadTextAsync($"{prefix}/links.json", ct);
+                if (!string.IsNullOrWhiteSpace(linkJson))
+                {
+                    try
+                    {
+                var arr = JsonSerializer.Deserialize<List<string>>(linkJson) ?? new List<string>();
+                var linkItems = arr.Select((u, idx) => new { key = $"link-{idx}", size = 0L, url = u ?? string.Empty, name = u ?? string.Empty });
+                items.AddRange(linkItems);
+            }
+            catch { }
         }
+
+                return Ok(items);
+            }
 
         [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update(Guid id, UpdateAssignmentDto dto)
@@ -295,7 +318,7 @@ namespace class_api.Controllers
             await _activityStream.PublishAsync(new ActivityEvent("assignment",
                 a.Classroom?.Teacher?.FullName ?? "Giáo viên",
                 $"cập nhật bài tập \"{a.Title}\"",
-                a.Classroom?.Name,
+                a.Classroom?.Name ?? string.Empty,
                 DateTime.UtcNow));
 
             var due2 = a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null;
@@ -322,7 +345,7 @@ namespace class_api.Controllers
             await _activityStream.PublishAsync(new ActivityEvent("assignment",
                 a.Classroom?.Teacher?.FullName ?? "Giáo viên",
                 $"xoá bài tập \"{a.Title}\"",
-                a.Classroom?.Name,
+                a.Classroom?.Name ?? string.Empty,
                 DateTime.UtcNow));
 
             return NoContent();

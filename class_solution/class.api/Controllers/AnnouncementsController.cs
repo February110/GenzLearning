@@ -27,6 +27,14 @@ namespace class_api.Controllers
             _db = db; _me = me; _hub = hub; _storage = storage; _activityStream = activityStream; _dispatcher = dispatcher;
         }
 
+        private static string Slugify(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "untitled";
+            var cleaned = new string(input.Trim().Select(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_' ? ch : '-').ToArray());
+            while (cleaned.Contains("--")) cleaned = cleaned.Replace("--", "-");
+            return cleaned.Trim('-').ToLowerInvariant();
+        }
+
         public record CreateAnnouncementDto(Guid ClassroomId, string Content, bool AllStudents = true, Guid[]? UserIds = null);
 
         [HttpPost]
@@ -77,7 +85,14 @@ namespace class_api.Controllers
             if (recipients.Any())
             {
                 var preview = ann.Content.Length > 120 ? ann.Content[..120] + "..." : ann.Content;
-                await _dispatcher.DispatchAsync(recipients, "Thông báo mới", preview, "announcement", ann.ClassroomId);
+                try
+                {
+                    await _dispatcher.DispatchAsync(recipients, "Thông báo mới", preview, "announcement", ann.ClassroomId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Dispatch announcement notification failed: {ex.Message}");
+                }
             }
 
             return Ok(payload);
@@ -121,7 +136,8 @@ namespace class_api.Controllers
             await _db.SaveChangesAsync(ct);
 
             // Upload materials immediately under `announcements/{id}`
-            var prefix = $"announcements/{ann.Id}";
+            var classSlug = Slugify(classroom!.Name);
+            var prefix = $"announcements/{classSlug}-{ann.Id.ToString()[..8]}";
             var items = new List<object>();
             if (Files != null)
             {
@@ -140,7 +156,8 @@ namespace class_api.Controllers
                     var arr = System.Text.Json.JsonSerializer.Deserialize<List<string>>(Links!) ?? new List<string>();
                     var json = System.Text.Json.JsonSerializer.Serialize(arr);
                     await _storage.UploadTextAsync($"{prefix}/links.json", json, "application/json", ct);
-                    items.AddRange(arr.Select(u => new { key = (string?)null, size = 0L, url = u, name = u }));
+                    var linkItems = arr.Select((u, idx) => new { key = $"link-{idx}", size = 0L, url = u ?? string.Empty, name = u ?? string.Empty });
+                    items.AddRange(linkItems);
                 }
                 catch { }
             }
@@ -165,14 +182,21 @@ namespace class_api.Controllers
             await _activityStream.PublishAsync(new ActivityEvent("announcement",
                 creator?.FullName ?? "Giáo viên",
                 "tạo thông báo mới",
-                classroom.Name,
+                classroom!.Name,
                 DateTime.UtcNow));
 
             var recipients = await ResolveAnnouncementRecipients(ann.ClassroomId, ann.IsForAll, ann.TargetUserIdsJson);
             if (recipients.Any())
             {
                 var preview = ann.Content.Length > 120 ? ann.Content[..120] + "..." : ann.Content;
-                await _dispatcher.DispatchAsync(recipients, "Thông báo mới", preview, "announcement", ann.ClassroomId);
+                try
+                {
+                    await _dispatcher.DispatchAsync(recipients, "Thông báo mới", preview, "announcement", ann.ClassroomId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Dispatch announcement notification failed: {ex.Message}");
+                }
             }
 
             return Ok(payload);
@@ -349,7 +373,9 @@ namespace class_api.Controllers
             var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == ann.ClassroomId && e.UserId == _me.UserId, ct);
             if (member == null || !string.Equals(member.Role, "Teacher", StringComparison.OrdinalIgnoreCase)) return Forbid();
 
-            var prefix = $"announcements/{id}";
+            var classroom = await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == ann.ClassroomId, ct);
+            var classSlug = Slugify(classroom?.Name);
+            var prefix = $"announcements/{classSlug}-{ann.Id.ToString()[..8]}";
             var results = new List<object>();
 
             if (files != null)
@@ -386,7 +412,9 @@ namespace class_api.Controllers
             var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == ann.ClassroomId && e.UserId == _me.UserId, ct);
             if (member == null) return Forbid();
 
-            var prefix = $"announcements/{id}";
+            var classroom = await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == ann.ClassroomId, ct);
+            var classSlug = Slugify(classroom?.Name);
+            var prefix = $"announcements/{classSlug}-{ann.Id.ToString()[..8]}";
             var blobs = await _storage.ListAsync(prefix, ct);
             var items = blobs
                 .Where(b => !b.key.EndsWith("links.json", StringComparison.OrdinalIgnoreCase))
@@ -399,7 +427,8 @@ namespace class_api.Controllers
                 try
                 {
                     var arr = System.Text.Json.JsonSerializer.Deserialize<List<string>>(linkJson) ?? new List<string>();
-                    items.AddRange(arr.Select(u => new { key = (string?)null, size = 0L, url = u, name = u }));
+                    var linkItems = arr.Select((u, idx) => new { key = $"link-{idx}", size = 0L, url = u ?? string.Empty, name = u ?? string.Empty });
+                    items.AddRange(linkItems);
                 }
                 catch { }
             }

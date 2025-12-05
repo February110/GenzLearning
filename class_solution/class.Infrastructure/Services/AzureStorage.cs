@@ -28,7 +28,8 @@ namespace class_api.Services
         )
         {
             var safeName = Path.GetFileName(fileName);
-            var key = $"{keyPrefix.TrimEnd('/')}/{DateTime.UtcNow:yyyy/MM/dd}/{Guid.NewGuid()}_{safeName}";
+            // Human-readable key: prefix/yyyyMMdd-HHmmss-filename
+            var key = $"{keyPrefix.TrimEnd('/')}/{DateTime.UtcNow:yyyyMMdd-HHmmss}-{safeName}";
 
             var blobClient = _container.GetBlobClient(key);
 

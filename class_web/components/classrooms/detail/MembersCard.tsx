@@ -24,7 +24,15 @@ export default function MembersCard({ members }: MembersCardProps) {
   }
 
   function getAvatar(member: any) {
-    const raw = member?.Avatar || member?.avatar || member?.User?.Avatar || member?.user?.avatar;
+    const raw =
+      member?.Avatar ||
+      member?.avatar ||
+      member?.User?.Avatar ||
+      member?.user?.avatar ||
+      member?.photoUrl ||
+      member?.PhotoUrl ||
+      member?.image ||
+      member?.picture;
     if (!raw) return undefined;
     return resolveAvatar(raw) || raw;
   }

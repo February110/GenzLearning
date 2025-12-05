@@ -100,8 +100,10 @@ export default function AssignmentsCard({
             } = assignment;
 
             const due = normalizedDue ? dayjs(normalizedDue) : null;
-            const overdue = due ? due.isBefore(dayjs()) : false;
-            const dueSoon = due ? !overdue && due.diff(dayjs(), "hour") <= 48 : false;
+            const overdueRaw = due ? due.isBefore(dayjs()) : false;
+            const dueSoonRaw = due ? !overdueRaw && due.diff(dayjs(), "hour") <= 48 : false;
+            const overdue = isTeacher ? false : overdueRaw;
+            const dueSoon = isTeacher ? false : dueSoonRaw;
 
             const submissionKey = normalizedId.toLowerCase();
             const submission = submissions[submissionKey];
@@ -112,6 +114,8 @@ export default function AssignmentsCard({
               ? "text-gray-400 bg-gray-100 border-gray-200"
               : overdue
               ? "text-rose-500 bg-rose-100 border-rose-200"
+              : dueSoon
+              ? "text-amber-600 bg-amber-50 border-amber-200"
               : "text-indigo-600 bg-indigo-50 border-indigo-100";
 
             const rowAccent = overdue
@@ -120,11 +124,28 @@ export default function AssignmentsCard({
               ? "border-amber-200 bg-amber-50 dark:bg-amber-950/20"
               : "border-gray-100 bg-white dark:bg-zinc-900/40";
 
-            const badgeStyles = overdue
+            let badgeStyles = overdue
               ? "bg-rose-100 text-rose-600"
               : dueSoon
               ? "bg-amber-100 text-amber-700"
               : "bg-emerald-100 text-emerald-700";
+
+            let badgeText: string | null = null;
+            if (due) {
+              if (isTeacher) {
+                if (overdueRaw) {
+                  badgeText = "Đã kết thúc";
+                  badgeStyles = "bg-gray-100 text-gray-600";
+                } else if (dueSoonRaw) {
+                  badgeText = "Sắp đến hạn";
+                  badgeStyles = "bg-amber-100 text-amber-700";
+                } else {
+                  badgeText = null;
+                }
+              } else {
+                badgeText = overdue ? "Đã quá hạn" : dueSoon ? "Sắp đến hạn" : "Đang mở";
+              }
+            }
 
             const sanitizedInstructions =
               normalizedInstructions?.replace(/<[^>]+>/g, "").trim() ?? "";
@@ -148,9 +169,9 @@ export default function AssignmentsCard({
                       <span className="text-base font-semibold text-gray-900 dark:text-gray-100">
                         {normalizedTitle}
                       </span>
-                      {due && (
+                      {badgeText && (
                         <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${badgeStyles}`}>
-                          {overdue ? "Đã quá hạn" : dueSoon ? "Sắp đến hạn" : "Đang mở"}
+                          {badgeText}
                         </span>
                       )}
                     </div>
