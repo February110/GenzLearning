@@ -98,8 +98,8 @@ namespace class_api.Controllers
                 var classes = await _db.Classrooms.CountAsync(ct);
                 var assignmentsCount = await _db.Assignments.CountAsync(ct);
                 var submissionsCount = await _db.Submissions.CountAsync(ct);
-                var dailyVisits = await _db.MeetingParticipants.CountAsync(mp => mp.JoinedAt >= dayStart, ct);
-                var weeklyVisits = await _db.MeetingParticipants.CountAsync(mp => mp.JoinedAt >= weekStart, ct);
+                var dailyVisits = await _db.Users.CountAsync(u => u.LastLoginAt >= dayStart, ct);
+                var weeklyVisits = await _db.Users.CountAsync(u => u.LastLoginAt >= weekStart, ct);
 
                 var currentEnrollments = await _db.Enrollments.CountAsync(e => e.JoinedAt >= currentMonthStart, ct);
                 var previousEnrollments = await _db.Enrollments.CountAsync(e => e.JoinedAt >= previousMonthStart && e.JoinedAt < currentMonthStart, ct);
@@ -119,11 +119,13 @@ namespace class_api.Controllers
 
                 var weekAnchor = StartOfWeek(now);
                 var eightWeeksAgo = weekAnchor.AddDays(-7 * 7);
-                var weeklyLoginDates = await _db.MeetingParticipants
-                    .Where(mp => mp.JoinedAt >= eightWeeksAgo)
-                    .Select(mp => mp.JoinedAt)
+                var weeklyLoginDates = await _db.Users
+                    .Where(u => u.LastLoginAt >= eightWeeksAgo && u.LastLoginAt != null)
+                    .Select(u => u.LastLoginAt)
                     .ToListAsync(ct);
                 var weeklyLoginMap = weeklyLoginDates
+                    .Where(d => d.HasValue)
+                    .Select(d => d!.Value)
                     .GroupBy(d => StartOfWeek(d))
                     .ToDictionary(g => g.Key, g => g.Count());
                 var loginsPerWeek = Enumerable.Range(0, 8)
