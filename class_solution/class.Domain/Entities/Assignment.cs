@@ -14,6 +14,9 @@ namespace class_api.Domain
 
         public int MaxPoints { get; set; } = 100;
 
+        public string? FileKey { get; set; }
+        public string? ContentType { get; set; }
+
         public Guid CreatedBy { get; set; }
         public User? Creator { get; set; }
 

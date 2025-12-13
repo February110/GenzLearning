@@ -16,6 +16,9 @@ namespace class_api.Domain
 
         public string? TargetUserIdsJson { get; set; }
 
+        public string? FileKey { get; set; }
+        public string? ContentType { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

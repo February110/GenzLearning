@@ -59,7 +59,6 @@ namespace class_api.Controllers
             _db.Assignments.Add(a);
             await _db.SaveChangesAsync();
 
-            // Broadcast to classroom group
             await _hub.Clients.Group(a.ClassroomId.ToString()).SendAsync("AssignmentCreated", new
             {
                 a.Id,
@@ -92,14 +91,13 @@ namespace class_api.Controllers
             return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints });
         }
 
-        // Create assignment with materials in a single multipart/form-data
         [HttpPost("with-materials")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> CreateWithMaterials(
             [FromForm] Guid ClassroomId,
             [FromForm] string Title,
             [FromForm] string? Instructions,
-            [FromForm] string? DueAt, // ISO string from FE
+            [FromForm] string? DueAt, 
             [FromForm] int MaxPoints = 100,
             [FromForm] IFormFileCollection? Files = null,
             [FromForm] string? Links = null,
@@ -130,9 +128,14 @@ namespace class_api.Controllers
             _db.Assignments.Add(a);
             await _db.SaveChangesAsync(ct);
 
-            // Upload materials right away under materials/{id}
-            var prefix = $"materials/{Slugify(a.Title)}-{a.Id.ToString()[..8]}";
+            var cls = member.Classroom ?? await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == ClassroomId, ct);
+            var classSlug = Slugify(cls?.Name);
+            var classShort = (cls?.Id ?? ClassroomId).ToString()[..8];
+            var assignShort = a.Id.ToString()[..8];
+            var prefix = $"materials/{classSlug}-{classShort}/{Slugify(a.Title)}-{assignShort}";
             var items = new List<object>();
+            string? firstKey = null;
+            string? firstContentType = null;
             if (Files != null)
             {
                 foreach (var f in Files)
@@ -141,6 +144,8 @@ namespace class_api.Controllers
                     await using var s = f.OpenReadStream();
                     var (key, size) = await _storage.UploadAsync(s, f.ContentType ?? "application/octet-stream", prefix, f.FileName, ct);
                     items.Add(new { key, size, name = f.FileName, url = _storage.GetTemporaryUrl(key) });
+                    firstKey ??= key;
+                    firstContentType ??= f.ContentType;
                 }
             }
             if (!string.IsNullOrWhiteSpace(Links))
@@ -155,12 +160,20 @@ namespace class_api.Controllers
                 catch { }
             }
 
-            // Broadcast with materials so clients can update immediately
+            if (firstKey != null)
+            {
+                a.FileKey = firstKey;
+                a.ContentType = firstContentType;
+                await _db.SaveChangesAsync(ct);
+            }
+
             await _hub.Clients.Group(a.ClassroomId.ToString()).SendAsync("AssignmentCreated", new
             {
                 id = a.Id,
                 classroomId = a.ClassroomId,
                 title = a.Title,
+                fileKey = a.FileKey,
+                contentType = a.ContentType,
                 dueAt = a.DueAt,
                 maxPoints = a.MaxPoints,
                 createdAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
@@ -217,7 +230,6 @@ namespace class_api.Controllers
             return Ok(list);
         }
 
-        // Upload assignment materials (files + optional links)
         [HttpPost("{id:guid}/materials")]
         public async Task<IActionResult> UploadMaterials(Guid id, [FromForm] IFormFileCollection files, [FromForm] string? links, CancellationToken ct)
         {
@@ -226,8 +238,14 @@ namespace class_api.Controllers
             var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == a.ClassroomId && e.UserId == _me.UserId, ct);
             if (member == null || member.Role != "Teacher") return Forbid();
 
-            var prefix = $"materials/{Slugify(a.Title)}-{a.Id.ToString()[..8]}";
+            var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == a.ClassroomId, ct);
+            var classSlug = Slugify(cls?.Name);
+            var classShort = (cls?.Id ?? a.ClassroomId).ToString()[..8];
+            var assignShort = a.Id.ToString()[..8];
+            var prefix = $"materials/{classSlug}-{classShort}/{Slugify(a.Title)}-{assignShort}";
             var results = new List<object>();
+            string? firstKey = null;
+            string? firstContentType = null;
 
             if (files != null)
             {
@@ -237,10 +255,11 @@ namespace class_api.Controllers
                     await using var s = f.OpenReadStream();
                     var (key, size) = await _storage.UploadAsync(s, f.ContentType ?? "application/octet-stream", prefix, f.FileName, ct);
                     results.Add(new { key, size, name = f.FileName, url = _storage.GetTemporaryUrl(key) });
+                    firstKey ??= key;
+                    firstContentType ??= f.ContentType;
                 }
             }
 
-            // save links array to links.json under prefix for later listing
             if (!string.IsNullOrWhiteSpace(links))
             {
                 try
@@ -252,40 +271,50 @@ namespace class_api.Controllers
                 catch { /* ignore malformed json */ }
             }
 
+            if (firstKey != null)
+            {
+                a.FileKey = firstKey;
+                a.ContentType = firstContentType;
+                await _db.SaveChangesAsync(ct);
+            }
+
             return Ok(new { items = results });
         }
 
-            // List materials for assignment
-            [HttpGet("{id:guid}/materials")]
-            public async Task<IActionResult> ListMaterials(Guid id, CancellationToken ct)
+        [HttpGet("{id:guid}/materials")]
+        public async Task<IActionResult> ListMaterials(Guid id, CancellationToken ct)
+        {
+            var a = await _db.Assignments.Include(x => x.Classroom).FirstOrDefaultAsync(x => x.Id == id, ct);
+            if (a == null) return NotFound();
+            var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == a.ClassroomId && e.UserId == _me.UserId, ct);
+            if (member == null) return Forbid();
+
+            var cls = a.Classroom ?? await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == a.ClassroomId, ct);
+            var classSlug = Slugify(cls?.Name);
+            var classShort = (cls?.Id ?? a.ClassroomId).ToString()[..8];
+            var assignShort = a.Id.ToString()[..8];
+            var prefix = $"materials/{classSlug}-{classShort}/{Slugify(a.Title)}-{assignShort}";
+
+            var blobs = await _storage.ListAsync(prefix, ct);
+            var items = blobs
+                .Where(b => !b.key.EndsWith("links.json", StringComparison.OrdinalIgnoreCase))
+                .Select(b => new { key = b.key, size = b.sizeBytes, url = _storage.GetTemporaryUrl(b.key), name = System.IO.Path.GetFileName(b.key) })
+                .ToList();
+
+            var linkJson = await _storage.ReadTextAsync($"{prefix}/links.json", ct);
+            if (!string.IsNullOrWhiteSpace(linkJson))
             {
-                var a = await _db.Assignments.FirstOrDefaultAsync(x => x.Id == id, ct);
-                if (a == null) return NotFound();
-                var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == a.ClassroomId && e.UserId == _me.UserId, ct);
-                if (member == null) return Forbid();
-
-                var prefix = $"materials/{Slugify(a.Title)}-{a.Id.ToString()[..8]}";
-                var blobs = await _storage.ListAsync(prefix, ct);
-                var items = blobs
-                    .Where(b => !b.key.EndsWith("links.json", StringComparison.OrdinalIgnoreCase))
-                    .Select(b => new { key = b.key, size = b.sizeBytes, url = _storage.GetTemporaryUrl(b.key), name = System.IO.Path.GetFileName(b.key) })
-                    .ToList();
-
-                // read links.json if present
-                var linkJson = await _storage.ReadTextAsync($"{prefix}/links.json", ct);
-                if (!string.IsNullOrWhiteSpace(linkJson))
+                try
                 {
-                    try
-                    {
-                var arr = JsonSerializer.Deserialize<List<string>>(linkJson) ?? new List<string>();
-                var linkItems = arr.Select((u, idx) => new { key = $"link-{idx}", size = 0L, url = u ?? string.Empty, name = u ?? string.Empty });
-                items.AddRange(linkItems);
+                    var arr = JsonSerializer.Deserialize<List<string>>(linkJson) ?? new List<string>();
+                    var linkItems = arr.Select((u, idx) => new { key = $"link-{idx}", size = 0L, url = u ?? string.Empty, name = u ?? string.Empty });
+                    items.AddRange(linkItems);
+                }
+                catch { }
             }
-            catch { }
-        }
 
-                return Ok(items);
-            }
+            return Ok(items);
+        }
 
         [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update(Guid id, UpdateAssignmentDto dto)

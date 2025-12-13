@@ -45,7 +45,6 @@ namespace class_api.Controllers
             var classroom = await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == dto.ClassroomId);
             if (classroom == null) return NotFound();
 
-            // must be teacher of this classroom
             var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == dto.ClassroomId && e.UserId == _me.UserId);
             if (member == null || !string.Equals(member.Role, "Teacher", StringComparison.OrdinalIgnoreCase))
                 return Forbid();
@@ -98,7 +97,6 @@ namespace class_api.Controllers
             return Ok(payload);
         }
 
-        // Create announcement with materials in a single multipart/form-data request
         [HttpPost("with-materials")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> CreateWithMaterials(
@@ -114,7 +112,6 @@ namespace class_api.Controllers
             var classroom = await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == ClassroomId);
             if (classroom == null) return NotFound();
 
-            // must be teacher of this classroom
             var member = await _db.Enrollments.FirstOrDefaultAsync(e => e.ClassroomId == ClassroomId && e.UserId == _me.UserId);
             if (member == null || !string.Equals(member.Role, "Teacher", StringComparison.OrdinalIgnoreCase))
                 return Forbid();
@@ -135,10 +132,15 @@ namespace class_api.Controllers
             _db.Announcements.Add(ann);
             await _db.SaveChangesAsync(ct);
 
-            // Upload materials immediately under `announcements/{id}`
+   
             var classSlug = Slugify(classroom!.Name);
-            var prefix = $"announcements/{classSlug}-{ann.Id.ToString()[..8]}";
+            var classShort = classroom.Id.ToString()[..8];
+            var annShort = ann.Id.ToString()[..8];
+            var created = DateTime.SpecifyKind(ann.CreatedAt, DateTimeKind.Utc);
+            var prefix = $"announcements/{classSlug}-{classShort}/{created:yyyyMMdd-HHmmss}-{annShort}";
             var items = new List<object>();
+            string? firstKey = null;
+            string? firstContentType = null;
             if (Files != null)
             {
                 foreach (var f in Files)
@@ -147,6 +149,8 @@ namespace class_api.Controllers
                     await using var s = f.OpenReadStream();
                     var (key, size) = await _storage.UploadAsync(s, f.ContentType ?? "application/octet-stream", prefix, f.FileName, ct);
                     items.Add(new { key, size, name = f.FileName, url = _storage.GetTemporaryUrl(key) });
+                    firstKey ??= key;
+                    firstContentType ??= f.ContentType;
                 }
             }
             if (!string.IsNullOrWhiteSpace(Links))
@@ -162,6 +166,13 @@ namespace class_api.Controllers
                 catch { }
             }
 
+            if (firstKey != null)
+            {
+                ann.FileKey = firstKey;
+                ann.ContentType = firstContentType;
+                await _db.SaveChangesAsync(ct);
+            }
+
             var creator = await _db.Users.FindAsync(_me.UserId);
             var createdAt = DateTime.SpecifyKind(ann.CreatedAt, DateTimeKind.Utc);
             var payload = new
@@ -169,6 +180,8 @@ namespace class_api.Controllers
                 id = ann.Id,
                 classroomId = ann.ClassroomId,
                 content = ann.Content,
+                fileKey = ann.FileKey,
+                contentType = ann.ContentType,
                 isForAll = ann.IsForAll,
                 targetUserIds = ParseTargets(ann.TargetUserIdsJson),
                 createdAt,
@@ -271,7 +284,6 @@ namespace class_api.Controllers
             return NoContent();
         }
 
-        // ===== Comments on announcements =====
         [HttpGet("{id:guid}/comments")]
         public async Task<IActionResult> ListComments(Guid id, int skip = 0, int take = 100)
         {
@@ -364,7 +376,7 @@ namespace class_api.Controllers
             return Ok(normalized);
         }
 
-        // Upload files/links for an announcement (teacher only)
+
         [HttpPost("{id:guid}/materials")]
         public async Task<IActionResult> UploadMaterials(Guid id, [FromForm] IFormFileCollection files, [FromForm] string? links, CancellationToken ct)
         {
@@ -403,7 +415,6 @@ namespace class_api.Controllers
             return Ok(new { items = results });
         }
 
-        // List files/links for an announcement
         [HttpGet("{id:guid}/materials")]
         public async Task<IActionResult> ListMaterials(Guid id, CancellationToken ct)
         {
