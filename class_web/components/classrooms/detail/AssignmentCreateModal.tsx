@@ -9,6 +9,8 @@ type FormState = {
   instructions: string;
   dueAt: string;
   maxPoints: number;
+  allowedFileTypes: string;
+  maxFileSizeMb: number | "";
 };
 
 interface AssignmentCreateModalProps {
@@ -181,6 +183,32 @@ export default function AssignmentCreateModal({
                 value={form.dueAt}
                 onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
               />
+            </div>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400">Định dạng nộp (đuôi file)</label>
+                <input
+                  disabled={creating}
+                  type="text"
+                  placeholder="Ví dụ: jpg, png, zip, rar"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm disabled:opacity-60"
+                  value={form.allowedFileTypes}
+                  onChange={(e) => setForm({ ...form, allowedFileTypes: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400">Dung lượng tối đa mỗi tệp (MB)</label>
+                <input
+                  disabled={creating}
+                  type="number"
+                  min={1}
+                  placeholder="Ví dụ: 100"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm disabled:opacity-60"
+                  value={form.maxFileSizeMb}
+                  onChange={(e) => setForm({ ...form, maxFileSizeMb: e.target.value === "" ? "" : Number(e.target.value) })}
+                />
+                <div className="text-xs text-gray-400 mt-1">Để trống nếu không giới hạn.</div>
+              </div>
             </div>
             <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-white dark:bg-zinc-950 p-3 space-y-3 shadow-sm">
               <div className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">Sinh câu hỏi trắc nghiệm (AI)</div>

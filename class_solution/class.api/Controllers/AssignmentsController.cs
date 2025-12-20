@@ -2,6 +2,7 @@ using class_api.Infrastructure.Data;
 using class_api.Domain;
 using class_api.Application.Dtos;
 using class_api.Services;
+using class_api.Utils;
 using Microsoft.AspNetCore.SignalR;
 using class_api.Hubs;
 using Microsoft.AspNetCore.Authorization;
@@ -36,6 +37,52 @@ namespace class_api.Controllers
             return cleaned.Trim('-').ToLowerInvariant();
         }
 
+        private static string BuildAssignmentTimestampPrefix(Assignment assignment, Classroom classroom)
+        {
+            var classSlug = Slugify(classroom.Name);
+            var classShort = classroom.Id.ToString();
+            if (classShort.Length > 8) classShort = classShort[..8];
+            var assignShort = assignment.Id.ToString();
+            if (assignShort.Length > 8) assignShort = assignShort[..8];
+            var created = DateTime.SpecifyKind(assignment.CreatedAt, DateTimeKind.Utc);
+            var titleSlug = Slugify(assignment.Title);
+            return $"materials/{classSlug}-{classShort}/{created:yyyyMMdd-HHmmss}-{assignShort}-{titleSlug}";
+        }
+
+        private static string BuildAssignmentPrefix(Assignment assignment, Classroom classroom, int maxChars = 8)
+        {
+            var classSlug = Slugify(classroom.Name);
+            var classShort = classroom.Id.ToString();
+            if (classShort.Length > maxChars) classShort = classShort[..maxChars];
+            var titleSlug = Slugify(assignment.Title);
+            return $"materials/{classSlug}-{classShort}/{titleSlug}-{assignment.Id}";
+        }
+
+        private static string BuildAssignmentPrefix6(Assignment assignment, Classroom classroom)
+            => BuildAssignmentPrefix(assignment, classroom, 6);
+
+        private static string? ExtractPrefixFromFileKey(string? key)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return null;
+            var normalized = key.Replace('\\', '/');
+            var idx = normalized.LastIndexOf('/');
+            if (idx <= 0) return null;
+            return normalized[..idx];
+        }
+
+        private static string ResolveAssignmentUploadPrefix(Assignment assignment, Classroom classroom)
+        {
+            var existing = ExtractPrefixFromFileKey(assignment.FileKey);
+            if (!string.IsNullOrWhiteSpace(existing)) return existing!;
+            return BuildAssignmentTimestampPrefix(assignment, classroom);
+        }
+
+        private static long? ToBytes(int? mb)
+        {
+            if (!mb.HasValue || mb.Value <= 0) return null;
+            return mb.Value * 1024L * 1024L;
+        }
+
         [HttpPost]
         [Consumes("application/json")]
         public async Task<IActionResult> Create(CreateAssignmentDto dto)
@@ -47,6 +94,9 @@ namespace class_api.Controllers
 
             if (member == null || member.Role != "Teacher") return Forbid();
 
+            var allowedTypes = FileTypeRules.NormalizeAllowedTypes(dto.AllowedFileTypes);
+            var maxSizeBytes = ToBytes(dto.MaxFileSizeMb);
+
             var a = new Assignment
             {
                 ClassroomId = dto.ClassroomId,
@@ -54,6 +104,8 @@ namespace class_api.Controllers
                 Instructions = dto.Instructions,
                 DueAt = dto.DueAt.HasValue ? DateTime.SpecifyKind(dto.DueAt.Value, DateTimeKind.Utc) : null,
                 MaxPoints = dto.MaxPoints,
+                AllowedFileTypes = allowedTypes,
+                MaxFileSizeBytes = maxSizeBytes,
                 CreatedBy = _me.UserId
             };
             _db.Assignments.Add(a);
@@ -66,6 +118,8 @@ namespace class_api.Controllers
                 a.Title,
                 DueAt = a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null,
                 a.MaxPoints,
+                a.AllowedFileTypes,
+                a.MaxFileSizeBytes,
                 CreatedAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc)
             });
 
@@ -88,7 +142,7 @@ namespace class_api.Controllers
                 }
             }
 
-            return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints });
+            return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes });
         }
 
         [HttpPost("with-materials")]
@@ -99,6 +153,8 @@ namespace class_api.Controllers
             [FromForm] string? Instructions,
             [FromForm] string? DueAt, 
             [FromForm] int MaxPoints = 100,
+            [FromForm] string? AllowedFileTypes = null,
+            [FromForm] int? MaxFileSizeMb = null,
             [FromForm] IFormFileCollection? Files = null,
             [FromForm] string? Links = null,
             CancellationToken ct = default)
@@ -116,6 +172,9 @@ namespace class_api.Controllers
                     dueAt = dt.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : dt.ToUniversalTime();
             }
 
+            var allowedTypes = FileTypeRules.NormalizeAllowedTypes(AllowedFileTypes);
+            var maxSizeBytes = ToBytes(MaxFileSizeMb);
+
             var a = new Assignment
             {
                 ClassroomId = ClassroomId,
@@ -123,16 +182,15 @@ namespace class_api.Controllers
                 Instructions = Instructions,
                 DueAt = dueAt,
                 MaxPoints = MaxPoints,
+                AllowedFileTypes = allowedTypes,
+                MaxFileSizeBytes = maxSizeBytes,
                 CreatedBy = _me.UserId
             };
             _db.Assignments.Add(a);
             await _db.SaveChangesAsync(ct);
 
             var cls = member.Classroom ?? await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == ClassroomId, ct);
-            var classSlug = Slugify(cls?.Name);
-            var classShort = (cls?.Id ?? ClassroomId).ToString()[..8];
-            var assignShort = a.Id.ToString()[..8];
-            var prefix = $"materials/{classSlug}-{classShort}/{Slugify(a.Title)}-{assignShort}";
+            var prefix = BuildAssignmentTimestampPrefix(a, cls ?? new Classroom { Id = ClassroomId, Name = "untitled" });
             var items = new List<object>();
             string? firstKey = null;
             string? firstContentType = null;
@@ -176,6 +234,8 @@ namespace class_api.Controllers
                 contentType = a.ContentType,
                 dueAt = a.DueAt,
                 maxPoints = a.MaxPoints,
+                allowedFileTypes = a.AllowedFileTypes,
+                maxFileSizeBytes = a.MaxFileSizeBytes,
                 createdAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
                 materials = items
             });
@@ -199,7 +259,7 @@ namespace class_api.Controllers
                 }
             }
 
-            return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints });
+            return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes });
         }
 
         [HttpGet("{id:guid}")]
@@ -212,7 +272,7 @@ namespace class_api.Controllers
             if (member == null) return Forbid();
 
             var due = a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null;
-            return Ok(new { a.Id, a.Title, a.Instructions, DueAt = due, a.MaxPoints, a.ClassroomId });
+            return Ok(new { a.Id, a.Title, a.Instructions, DueAt = due, a.MaxPoints, a.ClassroomId, a.AllowedFileTypes, a.MaxFileSizeBytes });
         }
 
         [HttpGet("classroom/{classroomId:guid}")]
@@ -239,10 +299,7 @@ namespace class_api.Controllers
             if (member == null || member.Role != "Teacher") return Forbid();
 
             var cls = await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == a.ClassroomId, ct);
-            var classSlug = Slugify(cls?.Name);
-            var classShort = (cls?.Id ?? a.ClassroomId).ToString()[..8];
-            var assignShort = a.Id.ToString()[..8];
-            var prefix = $"materials/{classSlug}-{classShort}/{Slugify(a.Title)}-{assignShort}";
+            var prefix = ResolveAssignmentUploadPrefix(a, cls ?? new Classroom { Id = a.ClassroomId, Name = "untitled" });
             var results = new List<object>();
             string? firstKey = null;
             string? firstContentType = null;
@@ -290,27 +347,25 @@ namespace class_api.Controllers
             if (member == null) return Forbid();
 
             var cls = a.Classroom ?? await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == a.ClassroomId, ct);
-            var classSlug = Slugify(cls?.Name);
-            var classShort = (cls?.Id ?? a.ClassroomId).ToString()[..8];
-            var assignShort = a.Id.ToString()[..8];
-            var prefix = $"materials/{classSlug}-{classShort}/{Slugify(a.Title)}-{assignShort}";
+            var items = new List<object>();
 
-            var blobs = await _storage.ListAsync(prefix, ct);
-            var items = blobs
-                .Where(b => !b.key.EndsWith("links.json", StringComparison.OrdinalIgnoreCase))
-                .Select(b => new { key = b.key, size = b.sizeBytes, url = _storage.GetTemporaryUrl(b.key), name = System.IO.Path.GetFileName(b.key) })
-                .ToList();
+            var tsPrefix = BuildAssignmentTimestampPrefix(a, cls ?? new Classroom { Id = a.ClassroomId, Name = "untitled" });
+            var idPrefix = BuildAssignmentPrefix(a, cls ?? new Classroom { Id = a.ClassroomId, Name = "untitled" });
+            var idPrefix6 = BuildAssignmentPrefix6(a, cls ?? new Classroom { Id = a.ClassroomId, Name = "untitled" });
 
-            var linkJson = await _storage.ReadTextAsync($"{prefix}/links.json", ct);
-            if (!string.IsNullOrWhiteSpace(linkJson))
+            await LoadAssignmentMaterials(items, tsPrefix, ct);
+            await LoadAssignmentMaterials(items, idPrefix, ct);
+            await LoadAssignmentMaterials(items, idPrefix6, ct);
+
+            if (items.Count == 0 && !string.IsNullOrWhiteSpace(a.FileKey))
             {
-                try
+                items.Add(new
                 {
-                    var arr = JsonSerializer.Deserialize<List<string>>(linkJson) ?? new List<string>();
-                    var linkItems = arr.Select((u, idx) => new { key = $"link-{idx}", size = 0L, url = u ?? string.Empty, name = u ?? string.Empty });
-                    items.AddRange(linkItems);
-                }
-                catch { }
+                    key = a.FileKey!,
+                    size = 0L,
+                    url = _storage.GetTemporaryUrl(a.FileKey!),
+                    name = System.IO.Path.GetFileName(a.FileKey!)
+                });
             }
 
             return Ok(items);
@@ -332,6 +387,8 @@ namespace class_api.Controllers
             a.Instructions = dto.Instructions;
             a.DueAt = dto.DueAt.HasValue ? DateTime.SpecifyKind(dto.DueAt.Value, DateTimeKind.Utc) : null;
             a.MaxPoints = dto.MaxPoints;
+            a.AllowedFileTypes = FileTypeRules.NormalizeAllowedTypes(dto.AllowedFileTypes);
+            a.MaxFileSizeBytes = ToBytes(dto.MaxFileSizeMb);
             a.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
@@ -341,7 +398,9 @@ namespace class_api.Controllers
                 a.ClassroomId,
                 a.Title,
                 DueAt = a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null,
-                a.MaxPoints
+                a.MaxPoints,
+                a.AllowedFileTypes,
+                a.MaxFileSizeBytes
             });
 
             await _activityStream.PublishAsync(new ActivityEvent("assignment",
@@ -351,7 +410,7 @@ namespace class_api.Controllers
                 DateTime.UtcNow));
 
             var due2 = a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null;
-            return Ok(new { a.Id, a.Title, a.Instructions, DueAt = due2, a.MaxPoints });
+            return Ok(new { a.Id, a.Title, a.Instructions, DueAt = due2, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes });
         }
 
         [HttpDelete("{id:guid}")]
@@ -386,6 +445,28 @@ namespace class_api.Controllers
                 .Where(e => e.ClassroomId == classroomId && e.Role == "Student")
                 .Select(e => e.UserId)
                 .ToListAsync();
+        }
+
+        private async Task LoadAssignmentMaterials(List<object> items, string prefix, CancellationToken ct)
+        {
+            var blobs = await _storage.ListAsync(prefix, ct);
+            items.AddRange(
+                blobs
+                    .Where(b => !b.key.EndsWith("links.json", StringComparison.OrdinalIgnoreCase))
+                    .Select(b => (object)new { key = b.key, size = b.sizeBytes, url = _storage.GetTemporaryUrl(b.key), name = System.IO.Path.GetFileName(b.key) })
+            );
+
+            var linkJson = await _storage.ReadTextAsync($"{prefix}/links.json", ct);
+            if (!string.IsNullOrWhiteSpace(linkJson))
+            {
+                try
+                {
+                    var arr = JsonSerializer.Deserialize<List<string>>(linkJson) ?? new List<string>();
+                    var linkItems = arr.Select((u, idx) => new { key = $"link-{idx}", size = 0L, url = u ?? string.Empty, name = u ?? string.Empty });
+                    items.AddRange(linkItems);
+                }
+                catch { }
+            }
         }
     }
 }

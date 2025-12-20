@@ -106,16 +106,19 @@ namespace class_api.Controllers
             var data = await _db.Enrollments
                 .Where(e => e.UserId == _me.UserId)
                 .Include(e => e.Classroom)
+                .ThenInclude(c => c.Teacher)
                 .Select(e => new
                 {
                     e.ClassroomId,
                     e.Role,
                     e.Classroom!.Name,
+                    TeacherName = e.Classroom.Teacher != null ? e.Classroom.Teacher.FullName : "",
                     e.Classroom.Description,
                     e.Classroom.InviteCode,
                     e.Classroom.Section,
                     BannerUrl = e.Classroom.BannerUrl,
-                    InviteCodeVisible = e.Classroom.InviteCodeVisible
+                    InviteCodeVisible = e.Classroom.InviteCodeVisible,
+                    CreatedAt = DateTime.SpecifyKind(e.Classroom.CreatedAt, DateTimeKind.Utc)
                 })
                 .ToListAsync();
 
@@ -155,6 +158,8 @@ namespace class_api.Controllers
                         a.Title,
                         DueAt = (DateTime?)(a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : null),
                         a.MaxPoints,
+                        a.AllowedFileTypes,
+                        a.MaxFileSizeBytes,
                         CreatedAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
                         Grades = a.Grades.Select(g => new
                         {

@@ -29,14 +29,24 @@ export default function ClassroomDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showAnnounce, setShowAnnounce] = useState(false);
+  const [announceDraft, setAnnounceDraft] = useState<{ sourceId: string; content: string; materials?: any[]; copyAttachments?: boolean } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [changingBanner, setChangingBanner] = useState(false);
   const [updatingInviteVisibility, setUpdatingInviteVisibility] = useState(false);
-  const [form, setForm] = useState<{ title: string; instructions: string; dueAt: string; maxPoints: number }>({
+  const [form, setForm] = useState<{
+    title: string;
+    instructions: string;
+    dueAt: string;
+    maxPoints: number;
+    allowedFileTypes: string;
+    maxFileSizeMb: number | "";
+  }>({
     title: "",
     instructions: "",
     dueAt: "",
     maxPoints: 100,
+    allowedFileTypes: "",
+    maxFileSizeMb: "",
   });
   const [attachFiles, setAttachFiles] = useState<File[]>([]);
   const [linkInput, setLinkInput] = useState("");
@@ -190,14 +200,38 @@ export default function ClassroomDetailPage() {
     }
   }
 
+  function openAnnouncement() {
+    setAnnounceDraft(null);
+    setShowAnnounce(true);
+  }
+
+  function closeAnnouncement() {
+    setShowAnnounce(false);
+    setAnnounceDraft(null);
+  }
+
+  function handleReuseAnnouncement(draft: { sourceId: string; content: string; materials?: any[]; copyAttachments?: boolean }) {
+    setAnnounceDraft(draft);
+    setShowAnnounce(true);
+  }
+
 
   // Edit state
   const [editing, setEditing] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState<{ title: string; instructions: string; dueAt: string; maxPoints: number }>({
+  const [editForm, setEditForm] = useState<{
+    title: string;
+    instructions: string;
+    dueAt: string;
+    maxPoints: number;
+    allowedFileTypes: string;
+    maxFileSizeMb: number | "";
+  }>({
     title: "",
     instructions: "",
     dueAt: "",
     maxPoints: 100,
+    allowedFileTypes: "",
+    maxFileSizeMb: "",
   });
   const [editFiles, setEditFiles] = useState<File[]>([]);
   const [editLinks, setEditLinks] = useState<string[]>([]);
@@ -326,7 +360,16 @@ export default function ClassroomDetailPage() {
         const cur = [ ...(((prev.assignments ?? prev.Assignments) as any[]) || []) ];
         const idLc = String(a?.Id || a?.id || "").toLowerCase();
         const without = cur.filter((x: any) => String(x.Id || x.id).toLowerCase() !== idLc);
-        const normalized = { Id: a.Id ?? a.id, Title: a.Title ?? a.title, DueAt: a.DueAt ?? a.dueAt ?? null, MaxPoints: a.MaxPoints ?? a.maxPoints, CreatedAt: a.CreatedAt ?? a.createdAt, ClassroomId: a.ClassroomId ?? a.classroomId };
+        const normalized = {
+          Id: a.Id ?? a.id,
+          Title: a.Title ?? a.title,
+          DueAt: a.DueAt ?? a.dueAt ?? null,
+          MaxPoints: a.MaxPoints ?? a.maxPoints,
+          AllowedFileTypes: a.AllowedFileTypes ?? a.allowedFileTypes ?? "",
+          MaxFileSizeBytes: a.MaxFileSizeBytes ?? a.maxFileSizeBytes ?? null,
+          CreatedAt: a.CreatedAt ?? a.createdAt,
+          ClassroomId: a.ClassroomId ?? a.classroomId
+        };
         const next = [ normalized, ...without ];
         return { ...prev, Assignments: next, assignments: next };
       });
@@ -339,7 +382,14 @@ export default function ClassroomDetailPage() {
         const next = cur.map((x: any) => {
           const xid = String(x.Id || x.id).toLowerCase();
           if (xid !== idLc) return x;
-          return { ...x, Title: a.Title ?? a.title ?? x.Title ?? x.title, DueAt: (a.DueAt ?? a.dueAt ?? x.DueAt ?? x.dueAt) ?? null, MaxPoints: a.MaxPoints ?? a.maxPoints ?? x.MaxPoints ?? x.maxPoints };
+          return {
+            ...x,
+            Title: a.Title ?? a.title ?? x.Title ?? x.title,
+            DueAt: (a.DueAt ?? a.dueAt ?? x.DueAt ?? x.dueAt) ?? null,
+            MaxPoints: a.MaxPoints ?? a.maxPoints ?? x.MaxPoints ?? x.maxPoints,
+            AllowedFileTypes: a.AllowedFileTypes ?? a.allowedFileTypes ?? x.AllowedFileTypes ?? x.allowedFileTypes ?? "",
+            MaxFileSizeBytes: a.MaxFileSizeBytes ?? a.maxFileSizeBytes ?? x.MaxFileSizeBytes ?? x.maxFileSizeBytes ?? null
+          };
         });
         return { ...prev, Assignments: next, assignments: next };
       });
@@ -387,16 +437,22 @@ export default function ClassroomDetailPage() {
         if (form.instructions) fd.append("Instructions", form.instructions);
         if (form.dueAt) fd.append("DueAt", new Date(form.dueAt).toISOString());
         fd.append("MaxPoints", String(Number(form.maxPoints) || 100));
+        if (form.allowedFileTypes.trim()) fd.append("AllowedFileTypes", form.allowedFileTypes.trim());
+        const maxSizeMb = Number(form.maxFileSizeMb);
+        if (!Number.isNaN(maxSizeMb) && maxSizeMb > 0) fd.append("MaxFileSizeMb", String(maxSizeMb));
         attachFiles.forEach((f) => fd.append("Files", f));
         if (links.length) fd.append("Links", JSON.stringify(links));
         await api.post("/assignments/with-materials", fd);
       } else {
+        const maxSizeMb = Number(form.maxFileSizeMb);
         await api.post("/assignments", {
           ClassroomId: String(classroomId),
           Title: form.title.trim(),
           Instructions: form.instructions || undefined,
           DueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
           MaxPoints: Number(form.maxPoints) || 100,
+          AllowedFileTypes: form.allowedFileTypes.trim() || undefined,
+          MaxFileSizeMb: !Number.isNaN(maxSizeMb) && maxSizeMb > 0 ? maxSizeMb : null,
         });
       }
 
@@ -404,7 +460,7 @@ export default function ClassroomDetailPage() {
       toast.success("Đã tạo bài tập");
       setFlash(`Đã giao bài: ${form.title.trim()}`);
       setTimeout(() => setFlash(""), 4000);
-      setForm({ title: "", instructions: "", dueAt: "", maxPoints: 100 });
+      setForm({ title: "", instructions: "", dueAt: "", maxPoints: 100, allowedFileTypes: "", maxFileSizeMb: "" });
       setAttachFiles([]);
       setLinks([]);
       setLinkInput("");
@@ -415,12 +471,17 @@ export default function ClassroomDetailPage() {
   }
 
   function startEdit(a: any) {
+    const allowedFileTypes = a.allowedFileTypes ?? a.AllowedFileTypes ?? "";
+    const maxBytes = a.maxFileSizeBytes ?? a.MaxFileSizeBytes;
+    const maxFileSizeMb = maxBytes ? Math.round(Number(maxBytes) / (1024 * 1024)) : "";
     setEditing(a);
     setEditForm({
       title: a.title || "",
       instructions: a.instructions || "",
       dueAt: a.dueAt ? new Date(a.dueAt).toISOString().slice(0, 16) : "",
       maxPoints: a.maxPoints || 100,
+      allowedFileTypes,
+      maxFileSizeMb,
     });
     const mats = a.attachments || a.materials || a.files || [];
     const detectedLinks = (mats || [])
@@ -436,11 +497,14 @@ export default function ClassroomDetailPage() {
     if (!editing) return;
     const id = editing.id;
     try {
+      const maxSizeMb = Number(editForm.maxFileSizeMb);
       const payload = {
         title: editForm.title.trim(),
         instructions: editForm.instructions || undefined,
         dueAt: editForm.dueAt ? new Date(editForm.dueAt).toISOString() : null,
         maxPoints: Number(editForm.maxPoints) || 100,
+        allowedFileTypes: editForm.allowedFileTypes.trim() || undefined,
+        maxFileSizeMb: !Number.isNaN(maxSizeMb) && maxSizeMb > 0 ? maxSizeMb : null,
       };
       await api.put(`/assignments/${id}`, payload);
 
@@ -518,16 +582,14 @@ export default function ClassroomDetailPage() {
           {flash}
         </div>
       )}
-      <ClassroomHero
-        classroom={classroom}
-        bannerUrl={bannerUrl}
-        inviteVisible={inviteVisible}
-        isTeacher={isTeacher}
-        onCopyInvite={copyInvite}
-        onToggleSettings={() => setShowSettings((prev) => !prev)}
-        onCreateAssignment={() => setShowCreate(true)}
-        onCreateAnnouncement={() => setShowAnnounce(true)}
-      />
+        <ClassroomHero
+          classroom={classroom}
+          bannerUrl={bannerUrl}
+          inviteVisible={inviteVisible}
+          isTeacher={isTeacher}
+          onCopyInvite={copyInvite}
+          onToggleSettings={() => setShowSettings((prev) => !prev)}
+        />
       <ClassroomSettingsSheet
         open={showSettings}
         inviteVisible={inviteVisible}
@@ -541,7 +603,12 @@ export default function ClassroomDetailPage() {
         <ClassroomTabMenu tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
         {activeTab === "news" && (
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-4">
-            <AnnouncementsPanel classroomId={String(classroomId)} isTeacher={isTeacher} />
+            <AnnouncementsPanel
+              classroomId={String(classroomId)}
+              isTeacher={isTeacher}
+              onReuse={handleReuseAnnouncement}
+              onCreate={openAnnouncement}
+            />
           </div>
         )}
         {activeTab === "assignments" && (
@@ -549,6 +616,7 @@ export default function ClassroomDetailPage() {
             assignments={classroom.assignments || []}
             submissions={mySubmissions}
             isTeacher={isTeacher}
+            onCreate={() => setShowCreate(true)}
             onEdit={startEdit}
             onDelete={removeAssignment}
           />
@@ -611,7 +679,11 @@ export default function ClassroomDetailPage() {
         onClose={() => setEditing(null)}
       />
       {showAnnounce && (
-        <AnnouncementModal classroomId={String(classroomId)} onClose={() => setShowAnnounce(false)} />
+        <AnnouncementModal
+          classroomId={String(classroomId)}
+          draft={announceDraft}
+          onClose={closeAnnouncement}
+        />
       )}
     </div>
   );

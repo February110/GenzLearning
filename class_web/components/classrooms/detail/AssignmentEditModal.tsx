@@ -8,6 +8,8 @@ type FormState = {
   instructions: string;
   dueAt: string;
   maxPoints: number;
+  allowedFileTypes: string;
+  maxFileSizeMb: number | "";
 };
 
 interface AssignmentEditModalProps {
@@ -136,6 +138,30 @@ export default function AssignmentEditModal({
                 value={form.dueAt}
                 onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
               />
+            </div>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400">Định dạng nộp (đuôi file)</label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: jpg, png, zip, rar"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+                  value={form.allowedFileTypes}
+                  onChange={(e) => setForm({ ...form, allowedFileTypes: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400">Dung lượng tối đa mỗi tệp (MB)</label>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="Ví dụ: 100"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+                  value={form.maxFileSizeMb}
+                  onChange={(e) => setForm({ ...form, maxFileSizeMb: e.target.value === "" ? "" : Number(e.target.value) })}
+                />
+                <div className="text-xs text-gray-400 mt-1">Để trống nếu không giới hạn.</div>
+              </div>
             </div>
             <div className="pt-2 flex justify-end gap-2">
               <button

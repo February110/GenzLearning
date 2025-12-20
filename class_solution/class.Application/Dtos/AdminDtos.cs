@@ -43,5 +43,8 @@ namespace class_api.Application.Dtos
         public DateTime? DueAt { get; set; }
         [Range(1, int.MaxValue)]
         public int MaxPoints { get; set; } = 100;
+        public string? AllowedFileTypes { get; set; }
+        [Range(1, int.MaxValue)]
+        public int? MaxFileSizeMb { get; set; }
     }
 }

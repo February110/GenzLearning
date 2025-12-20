@@ -9,6 +9,12 @@ namespace class_api.Application.Interfaces
             string fileName,
             CancellationToken ct = default
         );
+        Task<(string key, long sizeBytes)> CopyAsync(
+            string sourceKey,
+            string keyPrefix,
+            string fileName,
+            CancellationToken ct = default
+        );
 
         string GetTemporaryUrl(string key, int expiresInMinutes = 10080);
         string PublicUrl(string key);

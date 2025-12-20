@@ -1,6 +1,7 @@
 using class_api.Infrastructure.Data;
 using class_api.Domain;
 using class_api.Services;
+using class_api.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,30 @@ namespace class_api.Controllers
             _activityStream = activityStream;
         }
 
+        private static string? ValidateFile(IFormFile file, long? maxBytes, string[] allowedTokens)
+        {
+            if (file == null || file.Length == 0) return "File không hợp lệ.";
+            if (maxBytes.HasValue && file.Length > maxBytes.Value)
+            {
+                return $"Dung lượng tối đa mỗi tệp là {FormatFileSize(maxBytes.Value)}.";
+            }
+            if (allowedTokens.Length > 0 && !FileTypeRules.IsFileAllowed(file, allowedTokens))
+            {
+                var allowedText = FileTypeRules.FormatAllowedTypes(allowedTokens);
+                return $"Định dạng tệp không hợp lệ. Chỉ cho phép: {allowedText}.";
+            }
+            return null;
+        }
+
+        private static string FormatFileSize(long bytes)
+        {
+            const long mb = 1024L * 1024L;
+            if (bytes <= 0) return "0 MB";
+            if (bytes % mb == 0) return $"{bytes / mb} MB";
+            var value = bytes / (double)mb;
+            return $"{value:0.#} MB";
+        }
+
         [HttpPost("{assignmentId}/upload")]
         public async Task<IActionResult> Upload(Guid assignmentId, IFormFile file, CancellationToken ct)
         {
@@ -36,6 +61,11 @@ namespace class_api.Controllers
             var assignment = await _db.Assignments.Include(a => a.Classroom).FirstOrDefaultAsync(a => a.Id == assignmentId, ct);
             if (assignment == null)
                 return NotFound(new { message = "Không tìm thấy bài tập." });
+
+            var allowedTokens = FileTypeRules.ParseAllowedTypes(assignment.AllowedFileTypes);
+            var validationError = ValidateFile(file, assignment.MaxFileSizeBytes, allowedTokens);
+            if (validationError != null)
+                return BadRequest(new { message = validationError });
 
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
             string Slug(string? s)
@@ -104,6 +134,14 @@ namespace class_api.Controllers
             var assignment = await _db.Assignments.Include(a => a.Classroom).FirstOrDefaultAsync(a => a.Id == assignmentId, ct);
             if (assignment == null)
                 return NotFound(new { message = "Không tìm thấy bài tập." });
+
+            var allowedTokens = FileTypeRules.ParseAllowedTypes(assignment.AllowedFileTypes);
+            foreach (var f in files)
+            {
+                var validationError = ValidateFile(f, assignment.MaxFileSizeBytes, allowedTokens);
+                if (validationError != null)
+                    return BadRequest(new { message = $"{f.FileName}: {validationError}" });
+            }
 
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
             string Slug2(string? s)

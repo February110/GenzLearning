@@ -1,8 +1,7 @@
 "use client";
 
-import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
-import { BookOpen, Clipboard, Megaphone, Plus, Settings, Users } from "lucide-react";
+import { BookOpen, Clipboard, Settings, Users } from "lucide-react";
 import React from "react";
 
 interface ClassroomHeroProps {
@@ -12,8 +11,6 @@ interface ClassroomHeroProps {
   isTeacher: boolean;
   onCopyInvite: () => void;
   onToggleSettings: () => void;
-  onCreateAssignment: () => void;
-  onCreateAnnouncement: () => void;
 }
 
 function getInitials(name: string) {
@@ -37,8 +34,6 @@ export default function ClassroomHero({
   isTeacher,
   onCopyInvite,
   onToggleSettings,
-  onCreateAssignment,
-  onCreateAnnouncement,
 }: ClassroomHeroProps) {
   const assignmentsCount = (classroom?.assignments || []).length;
   const membersCount = ((classroom as any)?.Members || (classroom as any)?.members || []).length;
@@ -113,18 +108,6 @@ export default function ClassroomHero({
               </div>
             </div>
           </div>
-        </div>
-        <div className="absolute left-6 bottom-5 flex flex-wrap items-center gap-2">
-          {isTeacher && (
-            <>
-              <Button variant="primary" size="md" onClick={onCreateAssignment}>
-                <Plus className="h-4 w-4 mr-2" /> Tạo bài tập
-              </Button>
-              <Button variant="secondary" size="md" onClick={onCreateAnnouncement}>
-                <Megaphone className="h-4 w-4 mr-2" /> Tạo thông báo
-              </Button>
-            </>
-          )}
         </div>
       </div>
     </Card>

@@ -18,6 +18,7 @@ namespace class_api.Domain
 
         public string? FileKey { get; set; }
         public string? ContentType { get; set; }
+        public string? AttachmentKeysJson { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }

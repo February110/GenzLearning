@@ -16,6 +16,8 @@ namespace class_api.Domain
 
         public string? FileKey { get; set; }
         public string? ContentType { get; set; }
+        public string? AllowedFileTypes { get; set; }
+        public long? MaxFileSizeBytes { get; set; }
 
         public Guid CreatedBy { get; set; }
         public User? Creator { get; set; }

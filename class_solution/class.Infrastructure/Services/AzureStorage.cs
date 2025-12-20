@@ -37,6 +37,38 @@ namespace class_api.Services
 
             return (key, stream.Length);
         }
+        public async Task<(string key, long sizeBytes)> CopyAsync(
+            string sourceKey,
+            string keyPrefix,
+            string fileName,
+            CancellationToken ct = default
+        )
+        {
+            var safeName = Path.GetFileName(fileName);
+            var key = $"{keyPrefix.TrimEnd('/')}/{DateTime.UtcNow:yyyyMMdd-HHmmss}-{safeName}";
+
+            var sourceBlob = _container.GetBlobClient(sourceKey);
+            if (!await sourceBlob.ExistsAsync(ct)) return (key, 0);
+
+            var destBlob = _container.GetBlobClient(key);
+            var sourceUri = new Uri(GetTemporaryUrl(sourceKey, 60));
+            await destBlob.StartCopyFromUriAsync(sourceUri, cancellationToken: ct);
+
+            for (var i = 0; i < 15; i++)
+            {
+                var props = await destBlob.GetPropertiesAsync(cancellationToken: ct);
+                if (props.Value.CopyStatus != CopyStatus.Pending)
+                {
+                    if (props.Value.CopyStatus != CopyStatus.Success)
+                        throw new InvalidOperationException($"Blob copy failed: {props.Value.CopyStatus}");
+                    return (key, props.Value.ContentLength);
+                }
+                await Task.Delay(200, ct);
+            }
+
+            var finalProps = await destBlob.GetPropertiesAsync(cancellationToken: ct);
+            return (key, finalProps.Value.ContentLength);
+        }
         public string GetTemporaryUrl(string key, int expiresInMinutes = 10080)
         {
             var blobClient = _container.GetBlobClient(key);

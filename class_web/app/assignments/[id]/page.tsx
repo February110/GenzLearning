@@ -32,6 +32,60 @@ export default function AssignmentDetailPage() {
     const d = (assignment as any)?.dueAt || (assignment as any)?.DueAt;
     return d ? new Date(d).getTime() : null;
   }, [assignment]);
+  const allowedTokens = useMemo(() => {
+    const raw = (assignment?.allowedFileTypes || assignment?.AllowedFileTypes || "").toString();
+    return raw
+      .split(/[,;\s]+/)
+      .map((t) => t.trim().replace(/^\./, "").toLowerCase())
+      .filter(Boolean);
+  }, [assignment]);
+  const maxFileSizeBytes = useMemo(() => {
+    const val = assignment?.maxFileSizeBytes ?? assignment?.MaxFileSizeBytes ?? null;
+    const num = Number(val);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }, [assignment]);
+  const allowedTypesLabel = useMemo(() => {
+    if (!allowedTokens.length) return "";
+    return allowedTokens.map((t) => (t.includes("/") ? t : `.${t}`)).join(", ");
+  }, [allowedTokens]);
+  const acceptAttr = useMemo(() => {
+    if (!allowedTokens.length) return undefined;
+    return allowedTokens.map((t) => (t.includes("/") ? t : `.${t}`)).join(",");
+  }, [allowedTokens]);
+
+  function formatFileSize(bytes: number) {
+    const mb = 1024 * 1024;
+    if (!bytes || bytes <= 0) return "0 MB";
+    if (bytes % mb === 0) return `${bytes / mb} MB`;
+    return `${(bytes / mb).toFixed(1)} MB`;
+  }
+
+  function isFileTypeAllowed(file: File) {
+    if (!allowedTokens.length) return true;
+    const ext = file.name.split(".").pop()?.toLowerCase() || "";
+    const contentType = (file.type || "").toLowerCase();
+    return allowedTokens.some((token) => {
+      if (!token) return false;
+      if (token.includes("/")) {
+        if (token.endsWith("/*")) {
+          const prefix = token.slice(0, -1);
+          return contentType.startsWith(prefix);
+        }
+        return contentType === token;
+      }
+      return ext === token;
+    });
+  }
+
+  function validateFile(file: File) {
+    if (maxFileSizeBytes && file.size > maxFileSizeBytes) {
+      return `Dung lượng tối đa mỗi tệp là ${formatFileSize(maxFileSizeBytes)}.`;
+    }
+    if (!isFileTypeAllowed(file)) {
+      return `Định dạng không hợp lệ. Cho phép: ${allowedTypesLabel}.`;
+    }
+    return null;
+  }
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {};
 
@@ -120,6 +174,13 @@ export default function AssignmentDetailPage() {
 
   async function uploadSelected(selected: File[]){
     try {
+      const invalid = selected
+        .map((f) => ({ file: f, error: validateFile(f) }))
+        .filter((x) => x.error);
+      if (invalid.length > 0) {
+        invalid.forEach((x) => toast.error(`${x.file.name}: ${x.error}`));
+        return;
+      }
       setUploading(true);
       setUploadList(selected.map(f => ({ name: f.name, size: f.size, progress: 0, status: "uploading" })));
 
@@ -306,13 +367,38 @@ export default function AssignmentDetailPage() {
             {/* Actions */}
             <div className="flex flex-wrap items-center gap-3">
               <label className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800">
-                <input multiple type="file" className="hidden" onChange={(e)=> { const list = Array.from(e.target.files || []); if (list.length === 0) return; setFiles(prev => [...prev, ...list]); (e.target as HTMLInputElement).value = ""; }} />
+                <input
+                  multiple
+                  type="file"
+                  accept={acceptAttr}
+                  className="hidden"
+                  onChange={(e)=> {
+                    const list = Array.from(e.target.files || []);
+                    if (list.length === 0) return;
+                    const valid: File[] = [];
+                    const errors: string[] = [];
+                    list.forEach((f) => {
+                      const err = validateFile(f);
+                      if (err) errors.push(`${f.name}: ${err}`);
+                      else valid.push(f);
+                    });
+                    errors.forEach((msg) => toast.error(msg));
+                    if (valid.length > 0) setFiles(prev => [...prev, ...valid]);
+                    (e.target as HTMLInputElement).value = "";
+                  }}
+                />
                 + Thêm tệp
               </label>
               <button type="submit" disabled={uploading || files.length === 0} className="rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-5 py-2 text-sm">
                 {uploading ? 'Đang nộp...' : 'Nộp bài'}
               </button>
             </div>
+            {(allowedTokens.length > 0 || maxFileSizeBytes) && (
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {allowedTokens.length > 0 && <span>Định dạng: {allowedTypesLabel}</span>}
+                {maxFileSizeBytes && <span>{allowedTokens.length > 0 ? " • " : ""}Tối đa: {formatFileSize(maxFileSizeBytes)}</span>}
+              </div>
+            )}
 
             {/* Selected files (before upload) */}
             {files.length > 0 && uploadList.length === 0 && (

@@ -1,11 +1,12 @@
  "use client";
 
- import Card from "@/components/ui/Card";
+import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
  import { useRouter } from "next/navigation";
  import React, { useEffect, useMemo, useState } from "react";
  import dayjs from "dayjs";
  import relativeTime from "dayjs/plugin/relativeTime";
- import { ClipboardList, MoreVertical } from "lucide-react";
+import { ClipboardList, MoreVertical, Plus } from "lucide-react";
 
  dayjs.extend(relativeTime);
 
@@ -28,6 +29,7 @@ interface AssignmentsCardProps {
   assignments: AssignmentDto[];
   submissions?: Record<string, any>;
   isTeacher: boolean;
+  onCreate: () => void;
   onEdit: (assignment: AssignmentDto) => void;
   onDelete: (assignmentId: string) => void;
 }
@@ -36,6 +38,7 @@ export default function AssignmentsCard({
   assignments,
   submissions = {},
   isTeacher,
+  onCreate,
   onEdit,
   onDelete,
 }: AssignmentsCardProps) {
@@ -84,6 +87,11 @@ export default function AssignmentsCard({
           <p className="text-sm text-gray-500">Tổng cộng</p>
           <h2 className="text-xl font-semibold">{normalizedAssignments.length} bài tập</h2>
         </div>
+        {isTeacher && (
+          <Button variant="primary" size="md" className="!rounded-full" onClick={onCreate}>
+            <Plus className="h-4 w-4 mr-2" /> Tạo bài tập
+          </Button>
+        )}
       </div>
 
       {normalizedAssignments.length === 0 ? (

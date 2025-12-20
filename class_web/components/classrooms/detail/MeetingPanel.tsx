@@ -109,6 +109,7 @@ export default function MeetingPanel({
                 />
                 <Button
                   variant="primary"
+                  className="!rounded-full"
                   disabled={meetingBusy}
                   onClick={() => {
                     const chosen = titleInput.trim() || suggestedTitle;

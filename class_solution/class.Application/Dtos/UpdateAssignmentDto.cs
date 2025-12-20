@@ -4,7 +4,9 @@ namespace class_api.Application.Dtos
         string Title,
         string? Instructions,
         System.DateTime? DueAt,
-        int MaxPoints = 100
+        int MaxPoints = 100,
+        string? AllowedFileTypes = null,
+        int? MaxFileSizeMb = null
     );
 }
 

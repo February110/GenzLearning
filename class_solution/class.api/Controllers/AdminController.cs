@@ -2,6 +2,7 @@ using class_api.Infrastructure.Data;
 using class_api.Domain;
 using class_api.Application.Dtos;
 using class_api.Services;
+using class_api.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -313,6 +314,12 @@ namespace class_api.Controllers
             return bannerList[rand.Next(bannerList.Length)];
         }
 
+        private static long? ToBytes(int? mb)
+        {
+            if (!mb.HasValue || mb.Value <= 0) return null;
+            return mb.Value * 1024L * 1024L;
+        }
+
         [Authorize(Policy = "AdminOnly")]
         [HttpGet("classes")]
         public async Task<IActionResult> GetClasses()
@@ -459,6 +466,8 @@ namespace class_api.Controllers
                     a.Title,
                     a.Instructions,
                     a.MaxPoints,
+                    a.AllowedFileTypes,
+                    a.MaxFileSizeBytes,
                     DueAt = a.DueAt,
                     a.CreatedAt
                 })
@@ -480,6 +489,8 @@ namespace class_api.Controllers
                 Instructions = dto.Instructions,
                 DueAt = dto.DueAt?.ToUniversalTime(),
                 MaxPoints = dto.MaxPoints,
+                AllowedFileTypes = FileTypeRules.NormalizeAllowedTypes(dto.AllowedFileTypes),
+                MaxFileSizeBytes = ToBytes(dto.MaxFileSizeMb),
                 CreatedBy = classroom.TeacherId
             };
             _db.Assignments.Add(assignment);
@@ -510,6 +521,8 @@ namespace class_api.Controllers
             assignment.Instructions = dto.Instructions;
             assignment.DueAt = dto.DueAt?.ToUniversalTime();
             assignment.MaxPoints = dto.MaxPoints;
+            assignment.AllowedFileTypes = FileTypeRules.NormalizeAllowedTypes(dto.AllowedFileTypes);
+            assignment.MaxFileSizeBytes = ToBytes(dto.MaxFileSizeMb);
             assignment.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
             await PublishActivity("assignment",
