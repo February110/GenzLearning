@@ -2,10 +2,15 @@
 import "./globals.css";
 import Script from "next/script";
 import NextTopLoader from "nextjs-toploader";
-import { Inter } from "next/font/google";
+import { Space_Grotesk } from "next/font/google";
 import ClientWrapper from "@/components/ClientWrapper";
 
-const inter = Inter({ subsets: ["latin"] });
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-space-grotesk",
+  weight: ["300", "400", "500", "600", "700"],
+});
 
 export const metadata = {
   title: "GenZ Learning",
@@ -18,7 +23,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={spaceGrotesk.variable}>
         {/* Ensure theme class is applied ASAP to avoid mismatches across routes */}
         <Script id="theme-init" strategy="beforeInteractive">
           {`

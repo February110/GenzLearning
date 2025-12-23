@@ -4,7 +4,8 @@
 
 @theme {
   --font-*: initial;
-  --font-inter: Inter, sans-serif;
+  --font-ui: var(--font-space-grotesk), "Segoe UI", system-ui, -apple-system,
+    "Helvetica Neue", Arial, sans-serif;
 
   --color-current: currentColor;
   --color-transparent: transparent;
@@ -143,7 +144,7 @@
 
 @layer base {
   body {
-    @apply relative z-1 font-inter text-regular font-normal text-waterloo dark:text-manatee;
+    @apply relative z-1 font-ui text-regular font-normal text-waterloo dark:text-manatee;
   }
 }
 
