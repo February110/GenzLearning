@@ -5,7 +5,7 @@ export type AuthUser = {
   email: string;
   fullName: string;
   avatar?: string;
-  systemRole: "Admin" | "User";
+  systemRole: "Admin" | "Teacher" | "User";
 };
 
 export const getCurrentUser = (): AuthUser | null => {

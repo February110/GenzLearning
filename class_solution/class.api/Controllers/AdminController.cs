@@ -255,6 +255,23 @@ namespace class_api.Controllers
         }
 
         [Authorize(Policy = "AdminOnly")]
+        [HttpGet("teachers")]
+        public async Task<IActionResult> GetTeachers()
+        {
+            var teacherIds = _db.Enrollments
+                .Where(e => e.Role == "Teacher")
+                .Select(e => e.UserId);
+
+            var teachers = await _db.Users
+                .Where(u => u.SystemRole == "Teacher" || teacherIds.Contains(u.Id))
+                .OrderBy(u => u.FullName)
+                .Select(u => new { u.Id, u.Email, u.FullName, u.SystemRole, u.IsActive })
+                .ToListAsync();
+
+            return Ok(teachers);
+        }
+
+        [Authorize(Policy = "AdminOnly")]
         [HttpPost("users")]
         public async Task<IActionResult> CreateUser(AdminCreateUserDto dto)
         {

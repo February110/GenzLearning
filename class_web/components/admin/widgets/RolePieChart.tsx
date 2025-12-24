@@ -11,7 +11,7 @@ export default function RolePieChart({ data }: { data: { label: string; value: n
     labels: data.map((d) => d.label),
     dataLabels: { enabled: false },
     legend: { position: "bottom" },
-    colors: ["#0ea5e9", "#f97316"],
+    colors: ["#6366F1", "#60A5FA"],
     plotOptions: {
       pie: {
         donut: {
@@ -32,13 +32,13 @@ export default function RolePieChart({ data }: { data: { label: string; value: n
   const series = data.map((d) => d.value);
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-4">
+    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-sm">
       <div className="mb-4">
-        <p className="text-xs uppercase tracking-wide text-gray-700 font-semibold">Cơ cấu tài khoản</p>
-        <div className="text-sm text-gray-500">Giáo viên vs học viên</div>
+        <p className="text-xs uppercase tracking-wide text-slate-700 font-semibold">Cơ cấu tài khoản</p>
+        <div className="text-sm text-slate-500">Giáo viên vs học viên</div>
       </div>
       {data.length === 0 ? (
-        <p className="text-sm text-gray-500">Chưa có dữ liệu phân bổ.</p>
+        <p className="text-sm text-slate-500">Chưa có dữ liệu phân bổ.</p>
       ) : (
         <ReactApexChart options={options} series={series} type="donut" height={280} />
       )}

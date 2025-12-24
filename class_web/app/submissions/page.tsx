@@ -18,6 +18,7 @@ export default function MySubmissionsPage() {
   const [items, setItems] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "graded" | "pending">("all");
+  const [query, setQuery] = useState("");
   const [titles, setTitles] = useState<Record<string, { title: string; classroom?: string }>>({});
 
   async function load() {
@@ -61,8 +62,17 @@ export default function MySubmissionsPage() {
     };
     if (filter === "graded") list = list.filter((s) => hasScore(s));
     if (filter === "pending") list = list.filter((s) => !hasScore(s));
+    const key = query.trim().toLowerCase();
+    if (key) {
+      list = list.filter((s) => {
+        const meta = titles[s.assignmentId];
+        const title = (meta?.title || "").toLowerCase();
+        const classroom = (meta?.classroom || "").toLowerCase();
+        return title.includes(key) || classroom.includes(key) || s.assignmentId.toLowerCase().includes(key);
+      });
+    }
     return list;
-  }, [items, filter]);
+  }, [items, filter, query, titles]);
 
   return (
     <div className="space-y-4">
@@ -71,7 +81,13 @@ export default function MySubmissionsPage() {
         <div className="text-sm text-gray-500">Theo dõi các bài bạn đã nộp và điểm số</div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Tìm theo tên bài hoặc lớp"
+          className="w-64 rounded-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 px-4 py-2 text-sm outline-none focus:border-gray-300"
+        />
         <button onClick={() => setFilter("all")} className={`px-3 py-1.5 rounded-full text-xs border ${filter === "all" ? "bg-gray-900 text-white border-transparent dark:bg-gray-100 dark:text-black" : "border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"}`}>Tất cả</button>
         <button onClick={() => setFilter("pending")} className={`px-3 py-1.5 rounded-full text-xs border ${filter === "pending" ? "bg-amber-500 text-white border-transparent" : "border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"}`}>Chưa chấm</button>
         <button onClick={() => setFilter("graded")} className={`px-3 py-1.5 rounded-full text-xs border ${filter === "graded" ? "bg-emerald-600 text-white border-transparent" : "border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"}`}>Đã chấm</button>

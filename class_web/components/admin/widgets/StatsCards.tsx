@@ -13,28 +13,28 @@ type Card = {
 
 const colorStyles: Record<Card["color"], { badge: string; icon: string }> = {
   emerald: {
-    badge: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300",
-    icon: "text-emerald-600 dark:text-emerald-400",
+    badge: "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-200",
+    icon: "text-indigo-600 dark:text-indigo-300",
   },
   amber: {
-    badge: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300",
-    icon: "text-amber-600 dark:text-amber-400",
+    badge: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-200",
+    icon: "text-amber-600 dark:text-amber-300",
   },
   purple: {
-    badge: "bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300",
-    icon: "text-purple-600 dark:text-purple-400",
+    badge: "bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-200",
+    icon: "text-violet-600 dark:text-violet-300",
   },
   sky: {
-    badge: "bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300",
-    icon: "text-sky-600 dark:text-sky-400",
+    badge: "bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-200",
+    icon: "text-sky-600 dark:text-sky-300",
   },
   rose: {
-    badge: "bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300",
-    icon: "text-rose-600 dark:text-rose-400",
+    badge: "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-200",
+    icon: "text-rose-600 dark:text-rose-300",
   },
   indigo: {
-    badge: "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300",
-    icon: "text-indigo-600 dark:text-indigo-400",
+    badge: "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-200",
+    icon: "text-blue-600 dark:text-blue-300",
   },
 };
 
@@ -63,17 +63,17 @@ export default function StatsCards({
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
       {cards.map((c, idx) => (
-        <div key={idx} className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-4">
+        <div key={idx} className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-sm">
           <div className="flex items-center gap-3">
             <div className={clsx("h-9 w-9 grid place-items-center rounded-lg", colorStyles[c.color].badge)}>
               <c.icon size={18} className={colorStyles[c.color].icon} />
             </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">{c.title}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">{c.title}</div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <div className="text-2xl font-semibold">{c.value}</div>
           </div>
-          {c.description && <div className="text-xs text-gray-500 dark:text-gray-400">{c.description}</div>}
+          {c.description && <div className="text-xs text-slate-500 dark:text-slate-400">{c.description}</div>}
         </div>
       ))}
     </div>

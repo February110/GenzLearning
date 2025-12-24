@@ -148,7 +148,7 @@ export default function AdminTopbar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/95 dark:bg-slate-900/85 px-4 md:px-6 h-16">
+    <header className="sticky top-0 z-20 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-slate-900/90 backdrop-blur px-4 md:px-6 h-16">
       <div className="h-full flex items-center justify-between gap-3 text-slate-900 dark:text-slate-100">
         {/* Title */}
         <div className="min-w-0">
@@ -163,21 +163,21 @@ export default function AdminTopbar() {
           <div className="relative hidden md:block w-64 mr-2">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
-              placeholder="Search"
-              className="w-full rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-slate-300 outline-none pl-9 pr-3 py-2 text-sm text-slate-700 dark:text-slate-200"
+              placeholder="Tìm kiếm nhanh..."
+              className="w-full rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 pl-9 pr-3 py-2 text-sm text-slate-700 dark:text-slate-100 placeholder:text-slate-400"
             />
           </div>
         <button
           aria-label="Toggle Theme"
           onClick={() => setTheme(isDark ? "light" : "dark")}
-          className="rounded-full p-2 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+          className="h-10 w-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-100 shadow-sm flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
         <div ref={notifRef} className="relative">
           <button
             aria-label="Notifications"
-            className="relative rounded-full p-2 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+            className="relative h-10 w-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-100 shadow-sm flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800"
             onClick={() => setNotifOpen((v) => !v)}
           >
             <Bell size={18} />
@@ -188,8 +188,8 @@ export default function AdminTopbar() {
             )}
           </button>
           {notifOpen && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+            <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xl overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100/80 dark:border-slate-800">
                 <div>
                   <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Thông báo</div>                </div>
                 <button
@@ -209,7 +209,7 @@ export default function AdminTopbar() {
                     (showAllNotifications ? notifications : notifications.slice(0, 5)).map((item) => {
                     const created = toVietnamTime(item.createdAt);
                     const messageText = stripHtml(item.message);
-                    const accent = item.type === "assignment-due" ? "text-orange-500 bg-orange-50" : "text-indigo-500 bg-indigo-50";
+                    const accent = item.type === "assignment-due" ? "text-amber-600 bg-amber-50" : "text-indigo-600 bg-indigo-50";
                     return (
                       <button
                         key={item.id}
@@ -234,7 +234,7 @@ export default function AdminTopbar() {
               </div>
               {!notifLoading && notifications.length > 5 && (
                 <button
-                  className="w-full text-center text-sm font-semibold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-zinc-900/60 py-2"
+                  className="w-full text-center text-sm font-semibold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-900/60 py-2"
                   onClick={() => setShowAllNotifications((prev) => !prev)}
                 >
                   {showAllNotifications ? "Thu gọn" : "Xem thêm"}
@@ -246,7 +246,7 @@ export default function AdminTopbar() {
 
         <div ref={popRef} className="ml-2 relative">
           <button
-            className="flex items-center gap-2 rounded-full border border-transparent hover:border-gray-200 dark:hover:border-gray-700 px-1 py-1"
+            className="flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/70 px-1 py-1 shadow-sm hover:bg-white dark:hover:bg-slate-900"
             onClick={() => setOpen((v) => !v)}
             aria-haspopup="menu"
             aria-expanded={open}
@@ -255,34 +255,34 @@ export default function AdminTopbar() {
               <img
                 src={avatarUrl}
                 alt={user?.fullName || "Avatar"}
-                className="h-8 w-8 rounded-full object-cover border border-white/20 shadow-[0_2px_8px_rgba(124,58,237,0.35)]"
+                className="h-8 w-8 rounded-full object-cover border border-white/20 shadow-[0_2px_8px_rgba(79,70,229,0.35)]"
               />
             ) : (
-              <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-500 text-white text-sm font-semibold shadow-[0_2px_8px_rgba(124,58,237,0.35)]" suppressHydrationWarning>
+              <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-tr from-indigo-500 to-sky-400 text-white text-sm font-semibold shadow-[0_2px_8px_rgba(79,70,229,0.35)]" suppressHydrationWarning>
                 {initials || ""}
               </div>
             )}
-            <div className="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-200 max-w-32 truncate" suppressHydrationWarning>
+            <div className="hidden sm:block text-sm font-medium text-slate-700 dark:text-slate-200 max-w-32 truncate" suppressHydrationWarning>
               {user?.fullName || ""}
             </div>
-            <ChevronDown size={16} className="text-gray-500" />
+            <ChevronDown size={16} className="text-slate-500" />
           </button>
 
           {open && (
-            <div role="menu" className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 shadow-xl p-2">
-              <div className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300">
-                <div className="font-medium text-gray-900 dark:text-gray-100">{user?.fullName || "User"}</div>
+            <div role="menu" className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xl p-2">
+              <div className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                <div className="font-medium text-slate-900 dark:text-slate-100">{user?.fullName || "User"}</div>
                 <div className="text-xs truncate">{user?.email}</div>
               </div>
-              <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
-              <Link href="/profile" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800" role="menuitem">
+              <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
+              <Link href="/profile" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900/70" role="menuitem">
                 <User size={16} /> Profile
               </Link>
-              <Link href="#" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800" role="menuitem">
+              <Link href="#" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900/70" role="menuitem">
                 <Settings size={16} /> Settings
               </Link>
-              <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
-              <button onClick={() => { setOpen(false); handleLogout(); }} className="w-full text-left flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800" role="menuitem">
+              <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
+              <button onClick={() => { setOpen(false); handleLogout(); }} className="w-full text-left flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900/70" role="menuitem">
                 <LogOut size={16} /> Logout
               </button>
             </div>

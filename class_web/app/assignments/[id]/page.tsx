@@ -22,6 +22,7 @@ export default function AssignmentDetailPage() {
   const [isTeacher, setIsTeacher] = useState(false);
   const [students, setStudents] = useState<any[]>([]); // classroom students
   const [filter, setFilter] = useState<'all'|'submitted'|'assigned'>('all');
+  const [rosterQuery, setRosterQuery] = useState("");
   const [selectedEmail, setSelectedEmail] = useState<string>('');
   const [gradeInput, setGradeInput] = useState<string>('');
   const [feedbackInput, setFeedbackInput] = useState<string>('');
@@ -309,8 +310,13 @@ export default function AssignmentDetailPage() {
         return { ...s, group:g, submitted: !!g, latestAt: g?.latestAt || 0 };
       })
       .filter(item => filter==='all' ? true : filter==='submitted' ? item.submitted : !item.submitted)
+      .filter(item => {
+        const key = rosterQuery.trim().toLowerCase();
+        if (!key) return true;
+        return item.name.toLowerCase().includes(key) || item.email.toLowerCase().includes(key);
+      })
       .sort((a,b)=> b.latestAt - a.latestAt || a.name.localeCompare(b.name));
-  }, [students, byEmail, filter]);
+  }, [students, byEmail, filter, rosterQuery]);
 
   const selectedGroup = useMemo(()=> byEmail.get(selectedEmail), [byEmail, selectedEmail]);
 
@@ -485,13 +491,21 @@ export default function AssignmentDetailPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3">
             {/* Left roster */}
             <div className="border-r border-gray-100 dark:border-gray-800 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Tất cả học viên</div>
-                <select value={filter} onChange={(e)=> setFilter(e.target.value as any)} className="text-xs border rounded-md px-2 py-1 bg-white dark:bg-zinc-900">
-                  <option value="all">Tất cả</option>
-                  <option value="submitted">Đã nộp</option>
-                  <option value="assigned">Chưa nộp</option>
-                </select>
+              <div className="space-y-2">
+                <input
+                  value={rosterQuery}
+                  onChange={(e) => setRosterQuery(e.target.value)}
+                  placeholder="Tìm học viên..."
+                  className="w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                />
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">Tất cả học viên</div>
+                  <select value={filter} onChange={(e)=> setFilter(e.target.value as any)} className="text-xs border rounded-md px-2 py-1 bg-white dark:bg-zinc-900">
+                    <option value="all">Tất cả</option>
+                    <option value="submitted">Đã nộp</option>
+                    <option value="assigned">Chưa nộp</option>
+                  </select>
+                </div>
               </div>
               <div className="space-y-1 max-h-[60vh] overflow-auto pr-1">
                 {roster.map((r:any, idx:number)=>{
