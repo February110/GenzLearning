@@ -6,7 +6,7 @@ import { Space_Grotesk } from "next/font/google";
 import ClientWrapper from "@/components/ClientWrapper";
 
 const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext", "vietnamese"],
   display: "swap",
   variable: "--font-space-grotesk",
   weight: ["300", "400", "500", "600", "700"],
@@ -23,7 +23,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body className={spaceGrotesk.variable}>
+      <body className={`${spaceGrotesk.variable} ${spaceGrotesk.className}`}>
         {/* Ensure theme class is applied ASAP to avoid mismatches across routes */}
         <Script id="theme-init" strategy="beforeInteractive">
           {`
