@@ -2,14 +2,14 @@
 import "./globals.css";
 import Script from "next/script";
 import NextTopLoader from "nextjs-toploader";
-import { Space_Grotesk } from "next/font/google";
+import { Roboto } from "next/font/google";
 import ClientWrapper from "@/components/ClientWrapper";
 
-const spaceGrotesk = Space_Grotesk({
+const roboto = Roboto({
   subsets: ["latin", "latin-ext", "vietnamese"],
   display: "swap",
-  variable: "--font-space-grotesk",
-  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-roboto",
+  weight: ["300", "400", "500", "700"],
 });
 
 export const metadata = {
@@ -23,7 +23,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body className={`${spaceGrotesk.variable} ${spaceGrotesk.className}`}>
+      <body className={`${roboto.variable} ${roboto.className}`}>
         {/* Ensure theme class is applied ASAP to avoid mismatches across routes */}
         <Script id="theme-init" strategy="beforeInteractive">
           {`

@@ -37,7 +37,7 @@ export default function AssignmentDetailPage() {
     const raw = (assignment?.allowedFileTypes || assignment?.AllowedFileTypes || "").toString();
     return raw
       .split(/[,;\s]+/)
-      .map((t) => t.trim().replace(/^\./, "").toLowerCase())
+      .map((t: string) => t.trim().replace(/^\./, "").toLowerCase())
       .filter(Boolean);
   }, [assignment]);
   const maxFileSizeBytes = useMemo(() => {
