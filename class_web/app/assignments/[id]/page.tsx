@@ -33,11 +33,11 @@ export default function AssignmentDetailPage() {
     const d = (assignment as any)?.dueAt || (assignment as any)?.DueAt;
     return d ? new Date(d).getTime() : null;
   }, [assignment]);
-  const allowedTokens = useMemo(() => {
-    const raw = (assignment?.allowedFileTypes || assignment?.AllowedFileTypes || "").toString();
+  const allowedTokens = useMemo<string[]>(() => {
+    const raw = String(assignment?.allowedFileTypes || assignment?.AllowedFileTypes || "");
     return raw
       .split(/[,;\s]+/)
-      .map((t: string) => t.trim().replace(/^\./, "").toLowerCase())
+      .map((token) => token.trim().replace(/^\./, "").toLowerCase())
       .filter(Boolean);
   }, [assignment]);
   const maxFileSizeBytes = useMemo(() => {

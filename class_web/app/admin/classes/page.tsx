@@ -28,6 +28,18 @@ type ClassDetail = {
   members: { userId: string; fullName: string; email: string; role: string }[];
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Quản trị",
+  teacher: "Giáo viên",
+  user: "Người dùng",
+  student: "Học viên",
+};
+
+function formatRoleLabel(role?: string) {
+  const key = (role || "").toString().toLowerCase();
+  return ROLE_LABELS[key] || role || "";
+}
+
 export default function AdminClassesPage() {
   const [rows, setRows] = useState<ClassRow[]>([]);
   const [teachers, setTeachers] = useState<TeacherOption[]>([]);
@@ -200,10 +212,10 @@ export default function AdminClassesPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50/70 dark:bg-slate-900/60">
               <tr className="text-left text-slate-500">
-                <th className="px-4 py-3">Class</th>
-                <th className="px-4 py-3 text-center">Teacher</th>
-                <th className="px-4 py-3 text-center">Created</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3">Lớp học</th>
+                <th className="px-4 py-3 text-center">Giáo viên</th>
+                <th className="px-4 py-3 text-center">Ngày tạo</th>
+                <th className="px-4 py-3 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -287,7 +299,9 @@ export default function AdminClassesPage() {
                           <td className="px-4 py-2">{m.fullName}</td>
                           <td className="px-4 py-2 text-slate-500">{m.email}</td>
                           <td className="px-4 py-2 text-center">
-                            <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-900 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-300">{m.role}</span>
+                            <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-900 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-300">
+                              {formatRoleLabel(m.role)}
+                            </span>
                           </td>
                         </tr>
                       ))

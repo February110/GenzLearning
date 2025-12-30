@@ -18,7 +18,16 @@ const NavItem = ({ href, label, icon: Icon, collapsed = false }: { href: string;
         active ? "bg-indigo-50 text-indigo-700" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
       )}
     >
-      <span className={clsx("grid h-8 w-8 place-items-center rounded-md", active ? "bg-indigo-100 text-indigo-600" : "bg-white ring-1 ring-gray-200 text-gray-700 dark:bg-zinc-800 dark:ring-gray-700 dark:text-gray-200")}> 
+      <span
+        className={clsx(
+          "grid h-8 w-8 place-items-center rounded-md",
+          active
+            ? "bg-indigo-100 text-indigo-600"
+            : collapsed
+              ? "bg-transparent text-gray-700 dark:text-gray-300"
+              : "bg-white ring-1 ring-gray-200 text-gray-700 dark:bg-zinc-800 dark:ring-gray-700 dark:text-gray-200"
+        )}
+      >
         <Icon size={16} />
       </span>
       {!collapsed && <span className="font-medium">{label}</span>}

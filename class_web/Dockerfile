@@ -1,9 +1,8 @@
-# Base image
-FROM node:20-alpine AS base
+# Base image (avoid Docker Hub pull issues)
+FROM mcr.microsoft.com/devcontainers/javascript-node:20 AS base
 
 # Install dependencies layer
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
