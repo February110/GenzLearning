@@ -14,21 +14,18 @@ const NavItem = ({ href, label, icon: Icon, collapsed = false }: { href: string;
     <Link
       href={href}
       className={clsx(
-        "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition",
+        "group relative flex items-center rounded-lg text-sm transition",
+        collapsed ? "mx-auto justify-center p-2" : "gap-3 px-3 py-2",
         active ? "bg-indigo-50 text-indigo-700" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
       )}
     >
       <span
         className={clsx(
-          "grid h-8 w-8 place-items-center rounded-md",
-          active
-            ? "bg-indigo-100 text-indigo-600"
-            : collapsed
-              ? "bg-transparent text-gray-700 dark:text-gray-300"
-              : "bg-white ring-1 ring-gray-200 text-gray-700 dark:bg-zinc-800 dark:ring-gray-700 dark:text-gray-200"
+        "grid h-9 w-9 place-items-center rounded-md",
+          active ? "text-indigo-600" : "text-gray-700 dark:text-gray-300"
         )}
       >
-        <Icon size={16} />
+        <Icon size={20} />
       </span>
       {!collapsed && <span className="font-medium">{label}</span>}
     </Link>
@@ -36,7 +33,14 @@ const NavItem = ({ href, label, icon: Icon, collapsed = false }: { href: string;
 };
 
 export default function ClassroomSidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("sidebar:classrooms:collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [openTeach, setOpenTeach] = useState(true);
   const [openEnroll, setOpenEnroll] = useState(true);
 
@@ -69,6 +73,12 @@ export default function ClassroomSidebar() {
     window.addEventListener("classrooms:updated", handler);
     return () => window.removeEventListener("classrooms:updated", handler);
   }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("sidebar:classrooms:collapsed", collapsed ? "1" : "0");
+    } catch {}
+  }, [collapsed]);
 
   const teachClasses = useMemo(() => classes.filter((c) => c.role === "Teacher"), [classes]);
   const enrollClasses = useMemo(() => classes.filter((c) => c.role !== "Teacher"), [classes]);
@@ -88,7 +98,7 @@ export default function ClassroomSidebar() {
   return (
     <aside className={clsx("hidden md:flex shrink-0 flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950 relative transition-all", collapsed ? "w-16" : "w-72") }>
       <div className={clsx("flex items-center px-3 h-16 border-b border-gray-200 dark:border-gray-800", collapsed ? "justify-center" : "gap-3 px-5") }>
-        <img src="/images/logo/logo-light-admin.png" alt="GenZ Learning" className="h-8 w-auto" />
+        <img src="/images/logo/logo-light-admin.png" alt="GenZ Learning" className="h-9 w-9 object-contain border-0 shadow-none" />
         {!collapsed && <div className="text-lg font-semibold">GenZ Learning</div>}
         {!collapsed && (
           <button
@@ -111,7 +121,7 @@ export default function ClassroomSidebar() {
           <ChevronRight size={16} />
         </button>
       )}
-      <div className="px-3 py-4 overflow-y-auto">
+      <div className={clsx("py-4 overflow-y-auto", collapsed ? "px-1" : "px-3")}>
         {!collapsed && <div className="px-2 text-[11px] uppercase tracking-wider text-gray-400 mb-2">Menu</div>}
         <nav className="flex flex-col gap-1">
           <NavItem collapsed={collapsed} href="/classrooms/overview" label="Tổng quan" icon={LayoutDashboard} />
@@ -126,8 +136,8 @@ export default function ClassroomSidebar() {
               className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
               aria-expanded={openTeach}
             >
-              <span className="grid h-8 w-8 place-items-center rounded-md bg-white dark:bg-zinc-800 ring-1 ring-gray-200 dark:ring-gray-700 text-gray-700 dark:text-gray-200">
-                <Users size={16} />
+              <span className="grid h-9 w-9 place-items-center rounded-md text-gray-700 dark:text-gray-200">
+                <Users size={20} />
               </span>
               <span className="font-medium flex-1 text-left">Giảng dạy</span>
               <ChevronDown size={16} className={clsx("transition-transform", openTeach ? "rotate-180" : "rotate-0")} />
@@ -166,8 +176,8 @@ export default function ClassroomSidebar() {
               className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
               aria-expanded={openEnroll}
             >
-              <span className="grid h-8 w-8 place-items-center rounded-md bg-white dark:bg-zinc-800 ring-1 ring-gray-200 dark:ring-gray-700 text-gray-700 dark:text-gray-200">
-                <GraduationCap size={16} />
+              <span className="grid h-9 w-9 place-items-center rounded-md text-gray-700 dark:text-gray-200">
+                <GraduationCap size={20} />
               </span>
               <span className="font-medium flex-1 text-left">Đã đăng ký</span>
               <ChevronDown size={16} className={clsx("transition-transform", openEnroll ? "rotate-180" : "rotate-0")} />
