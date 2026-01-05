@@ -2,9 +2,11 @@ using class_api.Infrastructure.Data;
 using class_api.Domain;
 using class_api.Application.Dtos;
 using class_api.Services;
+using class_api.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 
 namespace class_api.Controllers
 {
@@ -16,12 +18,14 @@ namespace class_api.Controllers
         private readonly ApplicationDbContext _db;
         private readonly ICurrentUser _me;
         private readonly IActivityStream _activityStream;
+        private readonly IHubContext<NotificationHub> _hub;
 
-        public GradesController(ApplicationDbContext db, ICurrentUser me, IActivityStream activityStream)
+        public GradesController(ApplicationDbContext db, ICurrentUser me, IActivityStream activityStream, IHubContext<NotificationHub> hub)
         {
             _db = db;
             _me = me;
             _activityStream = activityStream;
+            _hub = hub;
         }
 
         [HttpPut("{submissionId:guid}")]
@@ -81,6 +85,22 @@ namespace class_api.Controllers
                 $"chấm {studentName} {dto.Grade} điểm",
                 className,
                 DateTime.UtcNow));
+            try
+            {
+                var realtimePayload = new
+                {
+                    assignmentId = sub.AssignmentId,
+                    submissionId = sub.Id,
+                    grade = grade.Score,
+                    feedback = grade.Feedback,
+                    gradeStatus = grade.Status,
+                    updatedAt = DateTime.SpecifyKind(grade.UpdatedAt, DateTimeKind.Utc)
+                };
+                await _hub.Clients.Group($"user:{sub.UserId}").SendAsync("GradeUpdated", realtimePayload, ct);
+            }
+            catch
+            {
+            }
             return Ok(new
             {
                 message = "Graded successfully",

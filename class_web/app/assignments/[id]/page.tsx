@@ -97,6 +97,54 @@ export default function AssignmentDetailPage() {
       try { const { data } = await api.get(`/comments/assignment/${id}`); setComments(data || []); } catch {}
     })();
   }, [id]);
+  useEffect(() => {
+    if (!id || typeof window === "undefined") return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5081/api";
+    const hubBase = base.replace(/\/api$/, "");
+    const conn = getSignalR(hubBase, "/hubs/notifications");
+    const handler = (payload: any) => {
+      const aid = payload?.assignmentId ?? payload?.AssignmentId;
+      if (!aid || String(aid).toLowerCase() !== String(id).toLowerCase()) return;
+      const grade = payload?.grade ?? payload?.Grade ?? payload?.score ?? payload?.Score ?? null;
+      const gradeStatus = payload?.gradeStatus ?? payload?.GradeStatus ?? payload?.status ?? payload?.Status ?? null;
+      const feedback = payload?.feedback ?? payload?.Feedback ?? null;
+      const updatedAt = payload?.updatedAt ?? payload?.UpdatedAt ?? null;
+      const submissionId = payload?.submissionId ?? payload?.SubmissionId ?? null;
+      setMySubs((prev) =>
+        prev.map((s: any) => {
+          const sid = s.id ?? s.Id;
+          const existingDetail = (s.gradeDetail || s.GradeDetail || {}) as any;
+          return {
+            ...s,
+            grade: grade ?? s.grade,
+            gradeStatus: gradeStatus ?? s.gradeStatus,
+            feedback: feedback ?? s.feedback,
+            gradeUpdatedAt: updatedAt ?? s.gradeUpdatedAt,
+            gradeDetail: {
+              ...existingDetail,
+              score: grade ?? existingDetail.score ?? existingDetail.Score ?? s.grade ?? s.Grade ?? null,
+              feedback: feedback ?? existingDetail.feedback ?? existingDetail.Feedback ?? s.feedback ?? s.Feedback ?? null,
+              status: gradeStatus ?? existingDetail.status ?? existingDetail.Status ?? s.gradeStatus ?? s.GradeStatus ?? null,
+              submissionId: submissionId ?? existingDetail.submissionId ?? existingDetail.SubmissionId ?? sid,
+              updatedAt: updatedAt ?? existingDetail.updatedAt ?? existingDetail.UpdatedAt ?? s.gradeUpdatedAt ?? s.GradeUpdatedAt ?? null,
+            },
+          };
+        })
+      );
+    };
+    try { (conn as any).off?.("GradeUpdated", handler as any); } catch {}
+    conn.on("GradeUpdated", handler);
+    const ensure = async () => {
+      try { await conn.start().catch(() => {}); } catch {}
+    };
+    ensure();
+    (conn as any).onreconnected?.(() => ensure());
+    return () => {
+      try { (conn as any).off?.("GradeUpdated", handler as any); } catch {}
+    };
+  }, [id]);
 
   async function load() {
     try {
@@ -445,6 +493,10 @@ export default function AssignmentDetailPage() {
                   const key = s.fileKey || s.FileKey;
                   const ts = new Date(s.submittedAt || s.SubmittedAt).toLocaleString();
                   const size = s.fileSize || s.FileSize || 0;
+                  const gradeDetail = (s.gradeDetail || s.GradeDetail || null) as any;
+                  const grade = s.grade ?? s.Grade ?? gradeDetail?.score ?? gradeDetail?.Score ?? null;
+                  const gradeStatus = s.gradeStatus ?? s.GradeStatus ?? gradeDetail?.status ?? gradeDetail?.Status ?? "";
+                  const gradeLabel = grade != null ? `Điểm: ${grade}` : (gradeStatus === "pending" ? "Đang chấm" : "Chưa chấm");
                   const lastSlash = (key||'').lastIndexOf('/')
                   const basename = lastSlash >= 0 ? key.slice(lastSlash+1) : key;
                   const parts = (basename||'').split('_');
@@ -455,7 +507,10 @@ export default function AssignmentDetailPage() {
                         <div className="truncate text-gray-800 dark:text-gray-200">{original || 'Tệp'}</div>
                         <div className="text-xs text-gray-500">{ts} • {(size/1024).toFixed(1)} KB</div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`px-2 py-1 rounded-md text-xs ${grade != null ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"}`}>
+                          {gradeLabel}
+                        </span>
                         <button className="shrink-0 rounded-md border px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-800" onClick={async()=>{ try{ const { data } = await api.get(`/submissions/public-url`, { params: { key } }); window.open(data.url, '_blank'); }catch{}}}>Xem/Tải</button>
                         <button
                           className="shrink-0 rounded-md border border-red-200 text-red-600 px-3 py-1.5 text-xs hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/30"

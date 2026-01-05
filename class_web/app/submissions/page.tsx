@@ -2,6 +2,7 @@
 import api from "@/api/client";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { getSignalR } from "@/lib/signalr";
 
 type Submission = {
   id: string;
@@ -52,6 +53,45 @@ export default function MySubmissionsPage() {
 
   useEffect(() => {
     load();
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5081/api";
+    const hubBase = base.replace(/\/api$/, "");
+    const conn = getSignalR(hubBase, "/hubs/notifications");
+    const handler = (payload: any) => {
+      const aid = payload?.assignmentId ?? payload?.AssignmentId;
+      if (!aid) return;
+      const grade = payload?.grade ?? payload?.Grade ?? payload?.score ?? payload?.Score ?? null;
+      const gradeStatus = payload?.gradeStatus ?? payload?.GradeStatus ?? payload?.status ?? payload?.Status ?? null;
+      const feedback = payload?.feedback ?? payload?.Feedback ?? null;
+      const updatedAt = payload?.updatedAt ?? payload?.UpdatedAt ?? null;
+      setItems((prev) =>
+        prev.map((s: any) => {
+          const sAid = s.assignmentId ?? s.AssignmentId;
+          if (String(sAid).toLowerCase() !== String(aid).toLowerCase()) return s;
+          return {
+            ...s,
+            grade: grade ?? s.grade,
+            gradeStatus: gradeStatus ?? s.gradeStatus,
+            feedback: feedback ?? s.feedback,
+            gradeUpdatedAt: updatedAt ?? s.gradeUpdatedAt,
+          };
+        })
+      );
+    };
+    try { (conn as any).off?.("GradeUpdated", handler as any); } catch {}
+    conn.on("GradeUpdated", handler);
+    const ensure = async () => {
+      try { await conn.start().catch(() => {}); } catch {}
+    };
+    ensure();
+    (conn as any).onreconnected?.(() => ensure());
+    return () => {
+      try { (conn as any).off?.("GradeUpdated", handler as any); } catch {}
+    };
   }, []);
 
   const filtered = useMemo(() => {
