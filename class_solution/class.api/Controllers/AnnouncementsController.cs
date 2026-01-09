@@ -749,6 +749,17 @@ namespace class_api.Controllers
 
             AppendAttachmentKeys(items, ann.AttachmentKeysJson);
 
+            if (items.Count == 0 && !string.IsNullOrWhiteSpace(ann.FileKey))
+            {
+                items.Add(new
+                {
+                    key = ann.FileKey!,
+                    size = 0L,
+                    url = _storage.GetTemporaryUrl(ann.FileKey!),
+                    name = Path.GetFileName(ann.FileKey!)
+                });
+            }
+
             return items;
         }
 
