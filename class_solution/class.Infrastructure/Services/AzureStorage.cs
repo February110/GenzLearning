@@ -69,6 +69,24 @@ namespace class_api.Services
             var finalProps = await destBlob.GetPropertiesAsync(cancellationToken: ct);
             return (key, finalProps.Value.ContentLength);
         }
+
+        public async Task<(Stream stream, string contentType, long sizeBytes)> OpenReadAsync(
+            string key,
+            CancellationToken ct = default
+        )
+        {
+            var blobClient = _container.GetBlobClient(key);
+            if (!await blobClient.ExistsAsync(ct))
+            {
+                return (Stream.Null, "application/octet-stream", 0);
+            }
+
+            var props = await blobClient.GetPropertiesAsync(cancellationToken: ct);
+            var stream = await blobClient.OpenReadAsync(cancellationToken: ct);
+            var contentType = props.Value.ContentType ?? "application/octet-stream";
+            var size = props.Value.ContentLength;
+            return (stream, contentType, size);
+        }
         public string GetTemporaryUrl(string key, int expiresInMinutes = 10080)
         {
             var blobClient = _container.GetBlobClient(key);

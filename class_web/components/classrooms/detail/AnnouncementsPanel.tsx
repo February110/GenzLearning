@@ -330,7 +330,7 @@ function AnnouncementFiles({ announcementId, initialItems }: { announcementId: s
   return (
     <div className="mt-1 flex flex-wrap gap-2">
       {items.map((it, i) => (
-        <AttachmentChip key={i} url={it.url} name={it.name} />
+        <AttachmentChip key={i} url={it.url} name={it.name} fileKey={it.key} />
       ))}
     </div>
   );
@@ -359,7 +359,7 @@ function detectType(url?: string, name?: string): string {
   return ext ? "file" : "link";
 }
 
-function FileRow({ url, name }: { url?: string; name?: string }) {
+function FileRow({ url, name, fileKey }: { url?: string; name?: string; fileKey?: string }) {
   const t = detectType(url, name);
   const label = name || url || "Tệp";
   const icon = (
@@ -388,7 +388,18 @@ function FileRow({ url, name }: { url?: string; name?: string }) {
     <li className="flex items-center gap-2 text-sm">
       <span>{icon}</span>
       {url ? (
-        <a href={url} target="_blank" className="text-indigo-600 hover:underline truncate">{label}</a>
+        <a
+          href={url}
+          target="_blank"
+          className="text-indigo-600 hover:underline truncate"
+          onClick={(e) => {
+            if (!fileKey) return;
+            e.preventDefault();
+            openFileViewer({ key: fileKey, name: label });
+          }}
+        >
+          {label}
+        </a>
       ) : (
         <span className="text-gray-700 dark:text-gray-300 truncate">{label}</span>
       )}
@@ -397,7 +408,7 @@ function FileRow({ url, name }: { url?: string; name?: string }) {
   );
 }
 
-function AttachmentChip({ url, name }: { url?: string; name?: string }) {
+function AttachmentChip({ url, name, fileKey }: { url?: string; name?: string; fileKey?: string }) {
   const t = detectType(url, name);
   const label = name || url || "Tệp";
   const isImg = t === "image" && !!url;
@@ -408,9 +419,13 @@ function AttachmentChip({ url, name }: { url?: string; name?: string }) {
       target={isLink && url ? "_blank" : undefined}
       rel={isLink && url ? "noopener noreferrer" : undefined}
       onClick={(e) => {
-        if (!url || isLink) return;
+        if (isLink || (!url && !fileKey)) return;
         e.preventDefault();
-        openFileViewer({ url, name: label });
+        if (fileKey) {
+          openFileViewer({ key: fileKey, name: label });
+        } else {
+          openFileViewer({ url, name: label });
+        }
       }}
       className="group inline-flex items-center gap-2 max-w-full rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-2 py-1 hover:bg-gray-50 dark:hover:bg-zinc-800"
     >

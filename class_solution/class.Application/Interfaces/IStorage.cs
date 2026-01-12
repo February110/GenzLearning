@@ -16,6 +16,8 @@ namespace class_api.Application.Interfaces
             CancellationToken ct = default
         );
 
+        Task<(Stream stream, string contentType, long sizeBytes)> OpenReadAsync(string key, CancellationToken ct = default);
+
         string GetTemporaryUrl(string key, int expiresInMinutes = 10080);
         string PublicUrl(string key);
         Task DeleteAsync(string key, CancellationToken ct = default);

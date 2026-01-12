@@ -48,6 +48,29 @@ namespace class_api.Controllers
             return $"{value:0.#} MB";
         }
 
+        private static string ExtractFileName(string key)
+        {
+            var name = Path.GetFileName(key);
+            if (string.IsNullOrWhiteSpace(name)) return "tep";
+            if (name.Length > 16 && name[8] == '-' && name[15] == '-')
+            {
+                var ok = true;
+                for (var i = 0; i < 8; i++)
+                {
+                    if (!char.IsDigit(name[i])) { ok = false; break; }
+                }
+                if (ok)
+                {
+                    for (var i = 9; i < 15; i++)
+                    {
+                        if (!char.IsDigit(name[i])) { ok = false; break; }
+                    }
+                }
+                if (ok) return name.Substring(16);
+            }
+            return name;
+        }
+
         [HttpPost("{assignmentId}/upload")]
         public async Task<IActionResult> Upload(Guid assignmentId, IFormFile file, CancellationToken ct)
         {
@@ -289,6 +312,31 @@ namespace class_api.Controllers
                 message = "Tạo liên kết tải thành công.",
                 downloadUrl = url
             });
+        }
+
+        [HttpGet("download-file")]
+        public async Task<IActionResult> DownloadFile([FromQuery] string? key, [FromQuery] Guid? id, CancellationToken ct)
+        {
+            string? fileKey = key;
+            string? contentType = null;
+            if (id.HasValue)
+            {
+                var submission = await _db.Submissions.FindAsync(new object?[] { id.Value }, ct);
+                if (submission == null)
+                    return NotFound(new { message = "Không tìm thấy bài nộp." });
+                fileKey = submission.FileKey;
+                contentType = submission.ContentType;
+            }
+            if (string.IsNullOrWhiteSpace(fileKey))
+                return BadRequest(new { message = "Thiếu key tệp." });
+
+            var (stream, storageContentType, sizeBytes) = await _storage.OpenReadAsync(fileKey, ct);
+            if (stream == Stream.Null || sizeBytes <= 0)
+                return NotFound(new { message = "Không tìm thấy tệp." });
+
+            var fileName = ExtractFileName(fileKey);
+            var finalType = storageContentType ?? contentType ?? "application/octet-stream";
+            return File(stream, finalType, fileName, enableRangeProcessing: true);
         }
 
         [HttpGet("my")]

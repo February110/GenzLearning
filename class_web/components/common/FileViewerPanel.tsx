@@ -36,6 +36,8 @@ export default function FileViewerPanel({
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -105,6 +107,42 @@ export default function FileViewerPanel({
     return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
   }, [fileUrl, viewerType]);
 
+  async function handleDownload() {
+    if (downloading) return;
+    try {
+      setDownloadError(null);
+      setDownloading(true);
+      let blob: Blob | null = null;
+      if (target.key || target.submissionId) {
+        const params: Record<string, string> = {};
+        if (target.key) params.key = target.key;
+        if (target.submissionId) params.id = target.submissionId;
+        const resp = await api.get("/submissions/download-file", {
+          params,
+          responseType: "blob",
+        });
+        blob = resp.data as Blob;
+      } else if (fileUrl) {
+        const resp = await fetch(fileUrl);
+        if (!resp.ok) throw new Error("Download failed");
+        blob = await resp.blob();
+      }
+      if (!blob) throw new Error("Download failed");
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = downloadName || "tep";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      setDownloadError("Không tải được tệp. Vui lòng thử lại.");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <div className={className ?? "p-4 md:p-6 space-y-4"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -114,25 +152,27 @@ export default function FileViewerPanel({
         </div>
         <div className="flex items-center gap-2">
           {fileUrl && (
-            <a
-              href={fileUrl}
-              download={downloadName}
-              className="rounded-md border border-gray-200 dark:border-gray-800 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800"
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              className="rounded-full border border-gray-200 dark:border-gray-800 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Tải xuống
-            </a>
+              {downloading ? "Đang tải..." : "Tải xuống"}
+            </button>
           )}
           {onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-gray-200 dark:border-gray-800 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800"
+              className="rounded-full border border-gray-200 dark:border-gray-800 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800"
             >
               Đóng
             </button>
           )}
         </div>
       </div>
+      {downloadError && <div className="text-xs text-rose-600">{downloadError}</div>}
 
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-4">
         {loading && <div className="text-sm text-gray-500">Đang tải tệp...</div>}
