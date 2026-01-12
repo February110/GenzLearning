@@ -176,6 +176,21 @@ export default function AssignmentDetailPage() {
     return "text-indigo-600 dark:text-indigo-300";
   }
 
+  function getFileLabel(name?: string, contentType?: string) {
+    const key = getFileTypeKey(name, contentType);
+    if (!key) return "FILE";
+    if (key === "image") return "IMG";
+    if (key === "video") return "VIDEO";
+    if (key === "audio") return "AUDIO";
+    if (key === "doc") return "DOC";
+    if (key === "xls") return "XLS";
+    if (key === "ppt") return "PPT";
+    if (key === "pdf") return "PDF";
+    if (key === "archive") return "ZIP";
+    if (key.length <= 6) return key.toUpperCase();
+    return "FILE";
+  }
+
   function isFileTypeAllowed(file: File) {
     if (!allowedTokens.length) return true;
     const ext = file.name.split(".").pop()?.toLowerCase() || "";
@@ -695,6 +710,7 @@ export default function AssignmentDetailPage() {
                   const original = getOriginalNameFromKey(key) || "Tệp";
                   const Icon = getFileIcon(original);
                   const iconClass = getFileIconClass(original);
+                  const label = getFileLabel(original);
                   return (
                     <div key={s.id || s.Id || i} className="flex items-center justify-between rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2">
                       <div className="flex items-start gap-3 min-w-0 pr-3">
@@ -702,7 +718,12 @@ export default function AssignmentDetailPage() {
                           <Icon size={18} />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white break-words">{original}</div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white break-words">{original}</div>
+                            <span className="text-[10px] uppercase tracking-wide rounded-full bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-gray-600 dark:text-gray-300">
+                              {label}
+                            </span>
+                          </div>
                           <div className="text-xs text-gray-500">{ts} • {(size/1024).toFixed(1)} KB</div>
                         </div>
                       </div>
@@ -921,6 +942,7 @@ export default function AssignmentDetailPage() {
                           const fileName = getOriginalNameFromKey(fileKey) || `Tệp #${i + 1}`;
                           const Icon = getFileIcon(fileName, contentType);
                           const iconClass = getFileIconClass(fileName, contentType);
+                          const label = getFileLabel(fileName, contentType);
                           return (
                             <div key={i} className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-3 py-2 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3 min-w-0">
@@ -928,8 +950,13 @@ export default function AssignmentDetailPage() {
                                   <Icon size={18} />
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-white break-words">
-                                    {fileName}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white break-words">
+                                      {fileName}
+                                    </div>
+                                    <span className="text-[10px] uppercase tracking-wide rounded-full bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-gray-600 dark:text-gray-300">
+                                      {label}
+                                    </span>
                                   </div>
                                   <div className="text-xs text-gray-500">
                                     {(f.size/1024).toFixed(1)} KB
