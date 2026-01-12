@@ -3,6 +3,7 @@
 import api from "@/api/client";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
+import { openFileViewer } from "@/utils/fileViewer";
 
 type ClassRow = { id: string; name: string; teacherName: string };
 type Assignment = { id: string; title: string };
@@ -102,9 +103,8 @@ export default function AdminSubmissionsPage() {
     }
   }
 
-  async function download(id: string) {
-    const { data } = await api.get(`/submissions/${id}/download`);
-    window.open(data.downloadUrl, "_blank");
+  function openSubmission(id: string) {
+    openFileViewer({ submissionId: id });
   }
 
   return (
@@ -182,8 +182,11 @@ export default function AdminSubmissionsPage() {
                     <td className="px-4 py-3 text-center">{new Date(s.submittedAt).toLocaleString()}</td>
                     <td className="px-4 py-3 text-center">{gradeLabel}</td>
                     <td className="px-4 py-3 text-right space-x-2">
-                      <button onClick={() => download(s.id)} className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/70">
-                        Tải
+                      <button
+                        onClick={() => openSubmission(s.id)}
+                        className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/70"
+                      >
+                        Xem
                       </button>
                       <button onClick={() => startGrade(s)} className="rounded-lg border border-indigo-200 dark:border-indigo-800 px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50">
                         {score != null ? "Sửa điểm" : "Chấm"}

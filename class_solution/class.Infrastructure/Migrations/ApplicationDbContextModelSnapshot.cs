@@ -290,6 +290,21 @@ namespace class_api.Migrations
                     b.Property<string>("Feedback")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("ReturnedContentType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReturnedFileKey")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReturnedFileName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("ReturnedFileSize")
+                        .HasColumnType("bigint");
+
                     b.Property<double>("Score")
                         .HasColumnType("float");
 

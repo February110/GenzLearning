@@ -3,6 +3,7 @@
 
 import ClientProviders from "@/components/ClientProviders";
 import { Toaster } from "react-hot-toast";
+import FileViewerHost from "@/components/common/FileViewerHost";
 
 /**
  * Quy ước:
@@ -13,6 +14,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
   return (
     <ClientProviders>
       {children}
+      <FileViewerHost />
       <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
     </ClientProviders>
   );

@@ -3,6 +3,7 @@ import api from "@/api/client";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getSignalR } from "@/lib/signalr";
+import { openFileViewer } from "@/utils/fileViewer";
 
 type Submission = {
   id: string;
@@ -46,9 +47,8 @@ export default function MySubmissionsPage() {
       setLoading(false);
     }
   }
-  async function getUrl(key: string) {
-    const { data } = await api.get(`/submissions/public-url`, { params: { key } });
-    window.open(data.url, "_blank");
+  function openSubmission(key: string) {
+    openFileViewer({ key });
   }
 
   useEffect(() => {
@@ -68,6 +68,10 @@ export default function MySubmissionsPage() {
       const gradeStatus = payload?.gradeStatus ?? payload?.GradeStatus ?? payload?.status ?? payload?.Status ?? null;
       const feedback = payload?.feedback ?? payload?.Feedback ?? null;
       const updatedAt = payload?.updatedAt ?? payload?.UpdatedAt ?? null;
+      const returnedFileKey = payload?.returnedFileKey ?? payload?.ReturnedFileKey ?? null;
+      const returnedFileName = payload?.returnedFileName ?? payload?.ReturnedFileName ?? null;
+      const returnedFileSize = payload?.returnedFileSize ?? payload?.ReturnedFileSize ?? null;
+      const returnedAt = payload?.returnedAt ?? payload?.ReturnedAt ?? null;
       setItems((prev) =>
         prev.map((s: any) => {
           const sAid = s.assignmentId ?? s.AssignmentId;
@@ -78,6 +82,17 @@ export default function MySubmissionsPage() {
             gradeStatus: gradeStatus ?? s.gradeStatus,
             feedback: feedback ?? s.feedback,
             gradeUpdatedAt: updatedAt ?? s.gradeUpdatedAt,
+            gradeDetail: {
+              ...(s.gradeDetail || s.GradeDetail || {}),
+              score: grade ?? s.grade ?? s.Grade ?? null,
+              feedback: feedback ?? s.feedback ?? s.Feedback ?? null,
+              status: gradeStatus ?? s.gradeStatus ?? s.GradeStatus ?? null,
+              updatedAt: updatedAt ?? s.gradeUpdatedAt ?? null,
+              returnedFileKey,
+              returnedFileName,
+              returnedFileSize,
+              returnedAt,
+            },
           };
         })
       );
@@ -148,7 +163,18 @@ export default function MySubmissionsPage() {
               const t = titles[s.assignmentId];
               const grade = (s as any).grade ?? (s as any).Grade;
               const status = (s as any).gradeStatus ?? (s as any).GradeStatus ?? "";
-              const statusLabel = grade != null ? `Điểm: ${grade}` : (status === "pending" ? "Đang chấm" : "Chưa chấm");
+              const gradeDetail = (s as any).gradeDetail ?? (s as any).GradeDetail ?? null;
+              const returnedFileKey = gradeDetail?.returnedFileKey ?? gradeDetail?.ReturnedFileKey ?? null;
+              const returnedFileName = gradeDetail?.returnedFileName ?? gradeDetail?.ReturnedFileName ?? null;
+              const isReturned = status === "returned";
+              const statusLabel =
+                isReturned && grade != null
+                  ? `Điểm: ${grade}`
+                  : status === "graded"
+                  ? "Đã chấm (chưa trả)"
+                  : status === "pending"
+                  ? "Đang chấm"
+                  : "Chưa chấm";
               const classroom = t?.classroom || "";
               return (
                 <div key={s.id} className="p-4 flex items-center gap-3">
@@ -160,10 +186,23 @@ export default function MySubmissionsPage() {
                     <div className="text-xs text-gray-500">Nộp lúc: {new Date(s.submittedAt).toLocaleString()}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded-md text-xs ${grade != null ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"}`}>
+                    <span className={`px-2 py-1 rounded-md text-xs ${isReturned ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"}`}>
                       {statusLabel}
                     </span>
-                    <button className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => getUrl(s.fileKey)}>Tải / Xem</button>
+                    {isReturned && returnedFileKey && (
+                      <button
+                        className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                        onClick={() => openFileViewer({ key: returnedFileKey, name: returnedFileName || "Bài đã chấm" })}
+                      >
+                        Bài đã chấm
+                      </button>
+                    )}
+                    <button
+                      className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                      onClick={() => openSubmission(s.fileKey)}
+                    >
+                      Xem
+                    </button>
                   </div>
                 </div>
               );

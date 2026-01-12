@@ -8,6 +8,7 @@ import RichTextEditor from "@/components/common/RichTextEditor";
 import Button from "@/components/ui/Button";
 import { toast } from "react-hot-toast";
 import { resolveAvatar } from "@/utils/resolveAvatar";
+import { isLikelyFileUrl, openFileViewer } from "@/utils/fileViewer";
 
 type Item = {
   id: string;
@@ -354,7 +355,7 @@ function detectType(url?: string, name?: string): string {
   if (["ppt", "pptx"].includes(ext)) return "ppt";
   if (["zip", "rar", "7z"].includes(ext)) return "zip";
   if (["txt", "md", "csv", "json"].includes(ext)) return "text";
-  if (!ext && url && /^https?:\/\//i.test(url)) return "link";
+  if (url && !isLikelyFileUrl(url, name)) return "link";
   return ext ? "file" : "link";
 }
 
@@ -400,10 +401,17 @@ function AttachmentChip({ url, name }: { url?: string; name?: string }) {
   const t = detectType(url, name);
   const label = name || url || "Tệp";
   const isImg = t === "image" && !!url;
+  const isLink = t === "link";
   return (
     <a
       href={url || "#"}
-      target={url ? "_blank" : undefined}
+      target={isLink && url ? "_blank" : undefined}
+      rel={isLink && url ? "noopener noreferrer" : undefined}
+      onClick={(e) => {
+        if (!url || isLink) return;
+        e.preventDefault();
+        openFileViewer({ url, name: label });
+      }}
       className="group inline-flex items-center gap-2 max-w-full rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-2 py-1 hover:bg-gray-50 dark:hover:bg-zinc-800"
     >
       {isImg ? (

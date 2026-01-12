@@ -111,15 +111,68 @@ export default function ClassroomDetailPage() {
     }
   }
 
+  const escapeHtml = (input: string) => {
+    return input
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  };
+
+  const toHtmlText = (input: string) => {
+    return escapeHtml(input).replace(/\r?\n/g, "<br/>");
+  };
+
+  const stripOptionPrefix = (input: string) => {
+    return input.replace(/^\s*[A-Da-d][\).\:-]\s*/, "").trim();
+  };
+
+  const splitInlineOptions = (input: string) => {
+    const parts = input.split(/(?=\b[A-Da-d][\).\:-]\s)/g).map((p) => p.trim()).filter(Boolean);
+    if (parts.length <= 1) return { question: input.trim(), options: [] as string[] };
+    const question = parts[0].replace(/[:\-–]\s*$/, "").trim();
+    const options = parts.slice(1).map(stripOptionPrefix).filter(Boolean);
+    return { question, options };
+  };
+
   function insertQuizToInstructions() {
     if (!aiResults || aiResults.length === 0) return;
     const html = aiResults
       .map((q: any, idx: number) => {
-        const opts = (q.options || q.Options || []).map((o: string) => `<li>${o}</li>`).join("");
-        return `<p><strong>Câu ${idx + 1}:</strong> ${q.question || q.Question || ""}</p><ul>${opts}</ul>`;
+        const rawQuestion = String(q.question || q.Question || "").trim();
+        const rawOptions = q.options ?? q.Options ?? [];
+        let options = Array.isArray(rawOptions)
+          ? rawOptions.map((o: any) => String(o ?? "").trim()).filter(Boolean)
+          : typeof rawOptions === "string"
+          ? rawOptions.split(/\r?\n/).map((o: string) => o.trim()).filter(Boolean)
+          : [];
+        let questionText = rawQuestion;
+        if (rawQuestion) {
+          const parsed = splitInlineOptions(rawQuestion);
+          if (parsed.options.length >= 2) {
+            questionText = parsed.question || rawQuestion;
+            if (options.length === 0) {
+              options = parsed.options;
+            }
+          }
+        }
+        const hasPrefix = options.length > 0 && options.every((o) => /^[A-Da-d][\).\:-]\s+/.test(o));
+        const optionItems = options
+          .map((o) => {
+            const text = hasPrefix ? stripOptionPrefix(o) : o;
+            return `<li>${toHtmlText(text)}</li>`;
+          })
+          .join("");
+        const listHtml = optionItems
+          ? `<ol style="list-style: upper-alpha; padding-left: 1.25rem; margin: 0.25rem 0;">${optionItems}</ol>`
+          : "";
+        const questionHtml = toHtmlText(questionText || rawQuestion || "");
+        return `<div style="margin-bottom: 0.75rem;"><div><strong>Câu ${idx + 1}:</strong> ${questionHtml}</div>${listHtml}</div>`;
       })
       .join("<hr />");
-    setForm((prev) => ({ ...prev, instructions: (prev.instructions || "") + "<br/>" + html }));
+    setForm((prev) => ({
+      ...prev,
+      instructions: (prev.instructions || "") + (prev.instructions ? "<br/>" : "") + html,
+    }));
     toast.success("Đã chèn câu hỏi vào hướng dẫn.");
   }
 

@@ -225,7 +225,11 @@ namespace class_api.Controllers
                             g.Feedback,
                             g.Status,
                             g.SubmissionId,
-                            g.UpdatedAt
+                            g.UpdatedAt,
+                            g.ReturnedFileKey,
+                            g.ReturnedFileName,
+                            g.ReturnedFileSize,
+                            g.ReturnedAt
                         })
                         .FirstOrDefault()
                 })
@@ -255,7 +259,13 @@ namespace class_api.Controllers
                         item.Grade.Feedback,
                         item.Grade.Status,
                         item.Grade.SubmissionId,
-                        UpdatedAt = DateTime.SpecifyKind(item.Grade.UpdatedAt, DateTimeKind.Utc)
+                        UpdatedAt = DateTime.SpecifyKind(item.Grade.UpdatedAt, DateTimeKind.Utc),
+                        item.Grade.ReturnedFileKey,
+                        item.Grade.ReturnedFileName,
+                        item.Grade.ReturnedFileSize,
+                        ReturnedAt = item.Grade.ReturnedAt.HasValue
+                            ? DateTime.SpecifyKind(item.Grade.ReturnedAt.Value, DateTimeKind.Utc)
+                            : (DateTime?)null
                     }
             });
 
@@ -303,7 +313,11 @@ namespace class_api.Controllers
                             g.Feedback,
                             g.Status,
                             g.SubmissionId,
-                            g.UpdatedAt
+                            g.UpdatedAt,
+                            g.ReturnedFileKey,
+                            g.ReturnedFileName,
+                            g.ReturnedFileSize,
+                            g.ReturnedAt
                         })
                         .FirstOrDefault()
                 })
@@ -331,7 +345,13 @@ namespace class_api.Controllers
                         item.Grade.Feedback,
                         item.Grade.Status,
                         item.Grade.SubmissionId,
-                        UpdatedAt = DateTime.SpecifyKind(item.Grade.UpdatedAt, DateTimeKind.Utc)
+                        UpdatedAt = DateTime.SpecifyKind(item.Grade.UpdatedAt, DateTimeKind.Utc),
+                        item.Grade.ReturnedFileKey,
+                        item.Grade.ReturnedFileName,
+                        item.Grade.ReturnedFileSize,
+                        ReturnedAt = item.Grade.ReturnedAt.HasValue
+                            ? DateTime.SpecifyKind(item.Grade.ReturnedAt.Value, DateTimeKind.Utc)
+                            : (DateTime?)null
                     }
             });
 
@@ -354,12 +374,29 @@ namespace class_api.Controllers
             if (uid == Guid.Empty)
                 return Unauthorized(new { message = "Vui lòng đăng nhập lại." });
 
-            var submission = await _db.Submissions.FirstOrDefaultAsync(s => s.Id == id, ct);
+            var submission = await _db.Submissions
+                .Include(s => s.Assignment)
+                .FirstOrDefaultAsync(s => s.Id == id, ct);
             if (submission == null)
                 return NotFound(new { message = "Không tìm thấy bài nộp." });
 
             if (submission.UserId != uid)
                 return Forbid();
+
+            var grade = await _db.Grades.AsNoTracking()
+                .FirstOrDefaultAsync(g => g.AssignmentId == submission.AssignmentId && g.UserId == uid, ct);
+            if (grade != null &&
+                (string.Equals(grade.Status, "graded", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(grade.Status, "returned", StringComparison.OrdinalIgnoreCase)))
+            {
+                return BadRequest(new { message = "Bài đã được chấm nên không thể hủy." });
+            }
+
+            var dueAt = submission.Assignment?.DueAt;
+            if (dueAt.HasValue && dueAt.Value <= DateTime.UtcNow)
+            {
+                return BadRequest(new { message = "Đã quá hạn nộp bài nên không thể hủy." });
+            }
 
             var relatedGrades = await _db.Grades
                 .Where(g => g.AssignmentId == submission.AssignmentId && g.UserId == uid)
@@ -389,6 +426,22 @@ namespace class_api.Controllers
 
             if (submissions.Count == 0)
                 return NotFound(new { message = "Không tìm thấy bài nộp của bạn cho bài tập này." });
+
+            var grade = await _db.Grades.AsNoTracking()
+                .FirstOrDefaultAsync(g => g.AssignmentId == assignmentId && g.UserId == uid, ct);
+            if (grade != null &&
+                (string.Equals(grade.Status, "graded", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(grade.Status, "returned", StringComparison.OrdinalIgnoreCase)))
+            {
+                return BadRequest(new { message = "Bài đã được chấm nên không thể hủy." });
+            }
+
+            var assignment = await _db.Assignments.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == assignmentId, ct);
+            if (assignment?.DueAt.HasValue == true && assignment.DueAt.Value <= DateTime.UtcNow)
+            {
+                return BadRequest(new { message = "Đã quá hạn nộp bài nên không thể hủy." });
+            }
 
             var relatedGrades = await _db.Grades
                 .Where(g => g.AssignmentId == assignmentId && g.UserId == uid)

@@ -8,6 +8,7 @@ import { resolveAvatar } from "@/utils/resolveAvatar";
 import { getSignalR } from "@/lib/signalr";
 import CommentsPanel from "@/components/assignments/CommentsPanel";
 import { toast } from "react-hot-toast";
+import { openFileViewer, isLikelyFileUrl } from "@/utils/fileViewer";
 
 export default function AssignmentDetailPage() {
   const params = useParams();
@@ -26,6 +27,7 @@ export default function AssignmentDetailPage() {
   const [selectedEmail, setSelectedEmail] = useState<string>('');
   const [gradeInput, setGradeInput] = useState<string>('');
   const [feedbackInput, setFeedbackInput] = useState<string>('');
+  const [returnFile, setReturnFile] = useState<File | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [commentInput, setCommentInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -59,6 +61,33 @@ export default function AssignmentDetailPage() {
     if (!bytes || bytes <= 0) return "0 MB";
     if (bytes % mb === 0) return `${bytes / mb} MB`;
     return `${(bytes / mb).toFixed(1)} MB`;
+  }
+
+  function getInitials(name: string) {
+    try {
+      return (name || "??")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(-2)
+        .map((s) => s[0])
+        .join("")
+        .toUpperCase();
+    } catch {
+      return "??";
+    }
+  }
+
+  function getAvatar(member: any) {
+    const raw =
+      member?.avatar ||
+      member?.Avatar ||
+      member?.photoUrl ||
+      member?.PhotoUrl ||
+      member?.image ||
+      member?.picture;
+    if (!raw) return undefined;
+    return resolveAvatar(raw) || raw;
   }
 
   function isFileTypeAllowed(file: File) {
@@ -111,6 +140,10 @@ export default function AssignmentDetailPage() {
       const gradeStatus = payload?.gradeStatus ?? payload?.GradeStatus ?? payload?.status ?? payload?.Status ?? null;
       const feedback = payload?.feedback ?? payload?.Feedback ?? null;
       const updatedAt = payload?.updatedAt ?? payload?.UpdatedAt ?? null;
+      const returnedFileKey = payload?.returnedFileKey ?? payload?.ReturnedFileKey ?? null;
+      const returnedFileName = payload?.returnedFileName ?? payload?.ReturnedFileName ?? null;
+      const returnedFileSize = payload?.returnedFileSize ?? payload?.ReturnedFileSize ?? null;
+      const returnedAt = payload?.returnedAt ?? payload?.ReturnedAt ?? null;
       const submissionId = payload?.submissionId ?? payload?.SubmissionId ?? null;
       setMySubs((prev) =>
         prev.map((s: any) => {
@@ -129,6 +162,10 @@ export default function AssignmentDetailPage() {
               status: gradeStatus ?? existingDetail.status ?? existingDetail.Status ?? s.gradeStatus ?? s.GradeStatus ?? null,
               submissionId: submissionId ?? existingDetail.submissionId ?? existingDetail.SubmissionId ?? sid,
               updatedAt: updatedAt ?? existingDetail.updatedAt ?? existingDetail.UpdatedAt ?? s.gradeUpdatedAt ?? s.GradeUpdatedAt ?? null,
+              returnedFileKey: returnedFileKey ?? existingDetail.returnedFileKey ?? existingDetail.ReturnedFileKey ?? null,
+              returnedFileName: returnedFileName ?? existingDetail.returnedFileName ?? existingDetail.ReturnedFileName ?? null,
+              returnedFileSize: returnedFileSize ?? existingDetail.returnedFileSize ?? existingDetail.ReturnedFileSize ?? null,
+              returnedAt: returnedAt ?? existingDetail.returnedAt ?? existingDetail.ReturnedAt ?? null,
             },
           };
         })
@@ -210,6 +247,7 @@ export default function AssignmentDetailPage() {
         name: m.FullName || m.fullName || '',
         email: m.Email || m.email || '',
         userId: m.UserId || m.userId || '',
+        avatar: m.Avatar || m.avatar || '',
       }));
       setStudents(studs);
     }catch{}
@@ -272,11 +310,8 @@ export default function AssignmentDetailPage() {
     catch(err:any){ toast.error(err?.response?.data?.message || 'Chấm điểm thất bại'); }
   }
 
-  async function openByKey(key: string){
-    try{
-      const { data } = await api.get(`/submissions/public-url`, { params: { key } });
-      window.open(data.url || data.downloadUrl, "_blank");
-    }catch{}
+  function openByKey(key: string, name?: string) {
+    openFileViewer({ key, name });
   }
 
   // Removed assignment-level CommentAdded listener. CommentsPanel handles thread-level realtime.
@@ -296,6 +331,8 @@ export default function AssignmentDetailPage() {
       const gradeStatus = (s.gradeStatus ?? s.GradeStatus ?? gradeDetail?.status ?? gradeDetail?.Status) || null;
       const gradeScore = (s.grade ?? s.Grade ?? gradeDetail?.score ?? gradeDetail?.Score) ?? null;
       const feedback = s.feedback ?? s.Feedback ?? gradeDetail?.feedback ?? gradeDetail?.Feedback ?? null;
+      const returnedFileKey = gradeDetail?.returnedFileKey ?? gradeDetail?.ReturnedFileKey ?? null;
+      const returnedFileName = gradeDetail?.returnedFileName ?? gradeDetail?.ReturnedFileName ?? null;
       if (!map.has(key)) {
         map.set(key, {
           userId,
@@ -306,6 +343,8 @@ export default function AssignmentDetailPage() {
           grade: gradeScore,
           gradeStatus,
           feedback,
+          returnedFileKey,
+          returnedFileName,
           files: [{ id, size, at, grade: gradeScore, gradeStatus, feedback }],
         });
       } else {
@@ -320,6 +359,8 @@ export default function AssignmentDetailPage() {
           g.grade = gradeScore;
         }
         if (gradeStatus && !g.gradeStatus) g.gradeStatus = gradeStatus;
+        if (returnedFileKey && !g.returnedFileKey) g.returnedFileKey = returnedFileKey;
+        if (returnedFileName && !g.returnedFileName) g.returnedFileName = returnedFileName;
         g.files.push({ id, size, at, grade: gradeScore, gradeStatus, feedback });
       }
     });
@@ -394,15 +435,35 @@ export default function AssignmentDetailPage() {
               <div className="text-sm font-medium">Tài liệu đính kèm</div>
               <ul className="space-y-2">
                 {materials.map((m: any, idx: number) => {
-                  const url = m.url || m.link || (m.path ? resolveAvatar(m.path) : m.filePath ? resolveAvatar(m.filePath) : undefined);
+                  const url =
+                    m.url ||
+                    m.link ||
+                    (m.path ? resolveAvatar(m.path) : m.filePath ? resolveAvatar(m.filePath) : undefined);
                   const key = m.key || m.fileKey;
+                  const name = m.name || m.fileName || m.originalName || url || key || "Tài liệu";
+                  const isLinkKey = typeof key === "string" && key.startsWith("link-");
+                  const canUseKey = Boolean(key) && !isLinkKey;
+                  const canPreviewUrl = Boolean(url) && isLikelyFileUrl(url, name);
                   return (
                     <li key={idx} className="flex items-center justify-between rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2">
-                      <div className="truncate text-sm">{m.name || m.fileName || m.originalName || url || key || 'Tài liệu'}</div>
-                      {url ? (
-                        <a href={url} target="_blank" className="text-indigo-600 text-sm hover:underline">Mở</a>
-                      ) : key ? (
-                        <button className="text-indigo-600 text-sm hover:underline" onClick={()=>openByKey(key)}>Tải / Xem</button>
+                      <div className="truncate text-sm">{name}</div>
+                      {canUseKey ? (
+                        <button className="text-indigo-600 text-sm hover:underline" onClick={() => openByKey(key, name)}>
+                          Xem
+                        </button>
+                      ) : url ? (
+                        canPreviewUrl ? (
+                          <button
+                            className="text-indigo-600 text-sm hover:underline"
+                            onClick={() => openFileViewer({ url, name })}
+                          >
+                            Xem
+                          </button>
+                        ) : (
+                          <a href={url} target="_blank" rel="noreferrer" className="text-indigo-600 text-sm hover:underline">
+                            Mở liên kết
+                          </a>
+                        )
                       ) : null}
                     </li>
                   );
@@ -496,7 +557,25 @@ export default function AssignmentDetailPage() {
                   const gradeDetail = (s.gradeDetail || s.GradeDetail || null) as any;
                   const grade = s.grade ?? s.Grade ?? gradeDetail?.score ?? gradeDetail?.Score ?? null;
                   const gradeStatus = s.gradeStatus ?? s.GradeStatus ?? gradeDetail?.status ?? gradeDetail?.Status ?? "";
-                  const gradeLabel = grade != null ? `Điểm: ${grade}` : (gradeStatus === "pending" ? "Đang chấm" : "Chưa chấm");
+                  const returnedFileKey = gradeDetail?.returnedFileKey ?? gradeDetail?.ReturnedFileKey ?? null;
+                  const returnedFileName = gradeDetail?.returnedFileName ?? gradeDetail?.ReturnedFileName ?? null;
+                  const isReturned = gradeStatus === "returned";
+                  const isGraded = gradeStatus === "graded" || gradeStatus === "returned";
+                  const isPastDue = !!(dueTs && Date.now() > dueTs);
+                  const canCancel = !isGraded && !isPastDue;
+                  const cancelTitle = isGraded
+                    ? "Bài đã được chấm nên không thể hủy."
+                    : isPastDue
+                    ? "Đã quá hạn nộp bài nên không thể hủy."
+                    : "Hủy nộp";
+                  const gradeLabel =
+                    isReturned && grade != null
+                      ? `Điểm: ${grade}`
+                      : gradeStatus === "graded"
+                      ? "Đã chấm (chưa trả)"
+                      : gradeStatus === "pending"
+                      ? "Đang chấm"
+                      : "Chưa chấm";
                   const lastSlash = (key||'').lastIndexOf('/')
                   const basename = lastSlash >= 0 ? key.slice(lastSlash+1) : key;
                   const parts = (basename||'').split('_');
@@ -508,12 +587,31 @@ export default function AssignmentDetailPage() {
                         <div className="text-xs text-gray-500">{ts} • {(size/1024).toFixed(1)} KB</div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={`px-2 py-1 rounded-md text-xs ${grade != null ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"}`}>
+                        <span className={`px-2 py-1 rounded-md text-xs ${isReturned ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"}`}>
                           {gradeLabel}
                         </span>
-                        <button className="shrink-0 rounded-md border px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-800" onClick={async()=>{ try{ const { data } = await api.get(`/submissions/public-url`, { params: { key } }); window.open(data.url, '_blank'); }catch{}}}>Xem/Tải</button>
+                        {isReturned && returnedFileKey && (
+                          <button
+                            className="shrink-0 rounded-md border px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-800"
+                            onClick={() =>
+                              openFileViewer({ key: returnedFileKey, name: returnedFileName || "Bài đã chấm" })
+                            }
+                          >
+                            Bài đã chấm
+                          </button>
+                        )}
                         <button
-                          className="shrink-0 rounded-md border border-red-200 text-red-600 px-3 py-1.5 text-xs hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/30"
+                          className="shrink-0 rounded-md border px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-800"
+                          onClick={() => {
+                            if (key) openFileViewer({ key, name: original || "Tệp" });
+                          }}
+                        >
+                          Xem
+                        </button>
+                        <button
+                          className={`shrink-0 rounded-md border border-red-200 text-red-600 px-3 py-1.5 text-xs dark:border-red-800 dark:text-red-300 ${canCancel ? "hover:bg-red-50 dark:hover:bg-red-900/30" : "opacity-50 cursor-not-allowed"}`}
+                          disabled={!canCancel}
+                          title={cancelTitle}
                           onClick={()=>handleDeleteSubmission(s.id || s.Id)}
                         >
                           Hủy nộp
@@ -570,30 +668,67 @@ export default function AssignmentDetailPage() {
                   const g = r.group;
                   const keyStable = r.userId || email || r.name || String(idx);
                   const isLate = !!(dueTs && g && g.latestAt > dueTs);
+                  const avatarSrc = getAvatar(r);
+                  const statusDotClass = g ? (isLate ? "bg-rose-500" : "bg-emerald-500") : "bg-gray-300";
+                  const statusTitle = g ? (isLate ? "Nộp muộn" : "Đã nộp") : "Chưa nộp";
                   return (
-                    <button key={keyStable} onClick={()=>{ setSelectedEmail(uid); setGradeInput(g?.grade ?? ''); setFeedbackInput(''); }} className={`w-full text-left rounded-lg border px-3 py-2 text-sm transition ${active ? 'border-indigo-500 bg-indigo-50 dark:bg-zinc-800' : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-zinc-900'}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium truncate">{r.name}</div>
-                        <div className={`h-2 w-2 rounded-full ${g ? (isLate ? 'bg-rose-500' : 'bg-emerald-500') : 'bg-gray-300'}`} title={g ? (isLate ? 'Nộp muộn' : 'Đã nộp') : 'Chưa nộp'} />
-                      </div>
-                      <div className="text-xs text-gray-500 truncate">{r.email}</div>
-                      <div className="text-xs mt-1 text-gray-600 dark:text-gray-300">
-                        {g ? (
-                          <>
-                            {`${g.files.length} tệp • ${(g.totalSize/1024).toFixed(1)} KB • ${new Date(g.latestAt).toLocaleString()}`}
-                            {isLate && <span className="ml-2 inline-flex items-center rounded-full bg-rose-50 text-rose-600 px-2 py-0.5">Muộn</span>}
-                          </>
-                        ) : 'Chưa nộp'}
-                      </div>
-                      {g && (
-                        <div className="text-xs text-gray-500">
-                          {g.grade != null
-                            ? `Điểm: ${g.grade}`
-                            : g.gradeStatus === "pending"
-                            ? "Đang chấm"
-                            : "Chưa chấm"}
+                    <button
+                      key={keyStable}
+                      onClick={() => {
+                        setSelectedEmail(uid);
+                        setGradeInput(g?.grade ?? "");
+                        setFeedbackInput("");
+                        setReturnFile(null);
+                      }}
+                      className={`w-full text-left rounded-lg border px-3 py-3 text-sm transition ${active ? 'border-indigo-500 bg-indigo-50 dark:bg-zinc-800' : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-zinc-900'}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {avatarSrc ? (
+                          <img
+                            src={avatarSrc}
+                            alt={r.name || "Học viên"}
+                            className="h-9 w-9 rounded-full object-cover border border-white/30"
+                          />
+                        ) : (
+                          <span className="h-9 w-9 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 flex items-center justify-center text-xs font-semibold">
+                            {getInitials(r.name || r.email || "?")}
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                {r.name || "Học viên"}
+                              </div>
+                              <div className="text-xs text-gray-500 truncate">{r.email || "—"}</div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {g && isLate && (
+                                <span className="inline-flex items-center rounded-full bg-rose-50 text-rose-600 px-2 py-0.5 text-[11px]">
+                                  Muộn
+                                </span>
+                              )}
+                              <div className={`h-2.5 w-2.5 rounded-full ${statusDotClass}`} title={statusTitle} />
+                            </div>
+                          </div>
+                          <div className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                            {g
+                              ? `${g.files.length} tệp • ${(g.totalSize / 1024).toFixed(1)} KB • ${new Date(g.latestAt).toLocaleString()}`
+                              : "Chưa nộp"}
+                          </div>
+                          {g && (
+                            <div className="text-xs text-gray-500">
+                              {g.gradeStatus === "returned"
+                                ? `Đã trả • ${g.grade ?? "-"}`
+                                : g.grade != null
+                                ? `Đã chấm • ${g.grade}`
+                                : g.gradeStatus === "pending"
+                                ? "Đang chấm"
+                                : "Chưa chấm"}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </button>
                   );
                 })}
@@ -617,8 +752,10 @@ export default function AssignmentDetailPage() {
                       <div className="text-xs text-gray-500">{students.find(s=> (s.userId||'').toString()===selectedEmail)?.email || '-'}</div>
                     </div>
                     <div className="text-sm text-gray-600">
-                      {selectedGroup && selectedGroup.grade != null
-                        ? `Điểm: ${selectedGroup.grade}`
+                      {selectedGroup?.gradeStatus === "returned"
+                        ? `Đã trả • ${selectedGroup.grade ?? "-"}`
+                        : selectedGroup && selectedGroup.grade != null
+                        ? `Đã chấm • ${selectedGroup.grade}`
                         : selectedGroup?.gradeStatus === "pending"
                         ? "Đang chấm"
                         : "Chưa chấm"}
@@ -634,7 +771,12 @@ export default function AssignmentDetailPage() {
                           return (
                             <div key={i} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 flex items-center justify-between">
                               <div className="text-xs truncate">#{i+1} • {(f.size/1024).toFixed(1)} KB {late && <span className="ml-2 inline-flex items-center rounded-full bg-rose-50 text-rose-600 px-2 py-0.5">Muộn</span>}</div>
-                              <button className="text-xs rounded-md border px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800" onClick={async()=>{ try{ const { data } = await api.get(`/submissions/${f.id}/download`); window.open(data.downloadUrl, '_blank'); }catch{} }}>Tải</button>
+                              <button
+                                className="text-xs rounded-md border px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                onClick={() => openFileViewer({ submissionId: String(f.id) })}
+                              >
+                                Xem
+                              </button>
                             </div>
                           );
                         })}
@@ -647,8 +789,12 @@ export default function AssignmentDetailPage() {
                   <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-sm font-medium">Chấm điểm</div>
-                      {selectedGroup?.grade != null ? (
+                      {selectedGroup?.gradeStatus === "returned" ? (
                         <span className="inline-flex items-center gap-1 text-xs rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5">
+                          <CheckCircle2 size={14} /> Đã trả
+                        </span>
+                      ) : selectedGroup?.grade != null ? (
+                        <span className="inline-flex items-center gap-1 text-xs rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5">
                           <CheckCircle2 size={14} /> Đã chấm
                         </span>
                       ) : selectedGroup?.gradeStatus === "pending" ? (
@@ -660,16 +806,87 @@ export default function AssignmentDetailPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <input type="number" placeholder={`0..${assignment?.maxPoints ?? 100}`} value={gradeInput as any} onChange={(e)=> setGradeInput(e.target.value)} className="w-28 rounded-md border px-3 py-2 text-sm bg-white dark:bg-zinc-950" />
                       <input type="text" placeholder="Nhận xét (tuỳ chọn)" value={feedbackInput} onChange={(e)=> setFeedbackInput(e.target.value)} className="flex-1 min-w-[220px] rounded-md border px-3 py-2 text-sm bg-white dark:bg-zinc-950" />
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <label className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800">
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            setReturnFile(f);
+                            (e.target as HTMLInputElement).value = "";
+                          }}
+                        />
+                        + Chọn file đã chấm (tuỳ chọn)
+                      </label>
+                      {returnFile && (
+                        <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[240px]">
+                          {returnFile.name}
+                        </span>
+                      )}
+                      {selectedGroup?.returnedFileKey && (
+                        <button
+                          className="text-xs rounded-md border px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          onClick={() =>
+                            openFileViewer({
+                              key: selectedGroup.returnedFileKey,
+                              name: selectedGroup.returnedFileName || "Bài đã chấm",
+                            })
+                          }
+                        >
+                          Xem bài đã chấm
+                        </button>
+                      )}
                       <button
                         className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                         disabled={!selectedGroup?.files?.length}
-                        onClick={async()=>{
-                        const val = Number(gradeInput);
-                        if(isNaN(val)) { toast.error('Điểm không hợp lệ'); return; }
-                        const firstId = selectedGroup?.files?.[0]?.id;
-                        if(!firstId){ toast.error('Chưa có bài nộp để chấm'); return; }
-                        try { await api.put(`/grades/${firstId}`, { grade: val, feedback: feedbackInput || undefined, status: "graded" }); toast.success('Chấm điểm thành công'); setFeedbackInput(''); await loadSubs(); } catch(err:any){ toast.error(err?.response?.data?.message || 'Chấm điểm thất bại'); }
-                     }}>Lưu điểm</button>
+                        onClick={async () => {
+                          const raw = String(gradeInput ?? "").trim();
+                          const inputVal = raw === "" ? NaN : Number(raw);
+                          const score = !isNaN(inputVal) ? inputVal : selectedGroup?.grade;
+                          if (score == null || isNaN(Number(score))) {
+                            toast.error("Điểm không hợp lệ");
+                            return;
+                          }
+                          const firstId = selectedGroup?.files?.[0]?.id;
+                          if (!firstId) {
+                            toast.error("Chưa có bài nộp để chấm");
+                            return;
+                          }
+                          const feedback = feedbackInput || selectedGroup?.feedback || undefined;
+                          try {
+                            if (returnFile) {
+                              const fd = new FormData();
+                              fd.append("file", returnFile);
+                              fd.append("grade", String(score));
+                              if (feedback) fd.append("feedback", feedback);
+                              await api.post(`/grades/${firstId}/return-file`, fd, {
+                                headers: { "Content-Type": "multipart/form-data" },
+                              });
+                              toast.success("Chấm điểm và trả bài thành công");
+                              setReturnFile(null);
+                            } else {
+                              await api.put(`/grades/${firstId}`, { grade: score, feedback, status: "returned" });
+                              toast.success("Chấm điểm thành công");
+                            }
+                            setFeedbackInput("");
+                            await loadSubs();
+                          } catch (err: any) {
+                            const actionLabel = returnFile ? "Chấm điểm và trả bài" : "Chấm điểm";
+                            const status = err?.response?.status;
+                            if (returnFile && status === 404) {
+                              toast.error("API chưa hỗ trợ trả bài. Hãy cập nhật backend hoặc bỏ chọn file để chỉ chấm điểm.");
+                              return;
+                            }
+                            toast.error(
+                              err?.response?.data?.message || `${actionLabel} thất bại`
+                            );
+                          }
+                        }}
+                      >
+                        Chấm điểm
+                      </button>
                     </div>
                     {selectedGroup?.feedback && (
                       <div className="mt-3 text-xs">

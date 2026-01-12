@@ -17,6 +17,12 @@ namespace class_api.Domain
         public string? Feedback { get; set; }
         public string Status { get; set; } = "pending";
 
+        public string? ReturnedFileKey { get; set; }
+        public string? ReturnedFileName { get; set; }
+        public string? ReturnedContentType { get; set; }
+        public long? ReturnedFileSize { get; set; }
+        public DateTime? ReturnedAt { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }

@@ -31,7 +31,11 @@ export default function GradesTable({ assignments, members }: GradesTableProps) 
           /{a.maxPoints ?? a.MaxPoints ?? 100}
         </span>
         <div className="text-xs text-gray-500">
-          {grade.status === "pending" ? "Đang chấm" : "Hoàn thành"}
+          {grade.status === "returned"
+            ? "Đã trả"
+            : grade.status === "pending"
+            ? "Đang chấm"
+            : "Hoàn thành"}
         </div>
       </div>
     );
