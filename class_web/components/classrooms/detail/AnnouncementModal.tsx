@@ -208,7 +208,7 @@ export default function AnnouncementModal({
               <>
                 <div className="flex flex-wrap gap-3 items-center">
                   <label
-                    className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm ${loading ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-gray-50"}`}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${loading ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-gray-50"}`}
                   >
                     <input
                       disabled={loading}
@@ -229,12 +229,12 @@ export default function AnnouncementModal({
                       value={linkInput}
                       onChange={(e) => setLinkInput(e.target.value)}
                       placeholder="Dán liên kết và nhấn Thêm"
-                      className="rounded-md border px-3 py-1.5 text-sm w-full disabled:opacity-60"
+                      className="rounded-full border px-4 py-1.5 text-sm w-full disabled:opacity-60"
                     />
                     <button
                       type="button"
                       disabled={loading}
-                      className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-60"
+                      className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-60"
                       onClick={() => {
                         if (linkInput.trim()) {
                           setLinks([...links, linkInput.trim()]);
@@ -270,7 +270,7 @@ export default function AnnouncementModal({
                           ? "🗜️"
                           : "📃";
                       return (
-                        <div key={i} className="flex items-center justify-between rounded-md border px-3 py-1 gap-3">
+                        <div key={i} className="flex items-center justify-between rounded-xl border px-3 py-1 gap-3">
                           <div className="flex items-center gap-2 min-w-0">
                             <span>{icon}</span>
                             <span className="truncate">
@@ -284,7 +284,7 @@ export default function AnnouncementModal({
                       );
                     })}
                     {links.map((u, i) => (
-                      <div key={i} className="flex items-center justify-between rounded-md border px-3 py-1 gap-3">
+                      <div key={i} className="flex items-center justify-between rounded-xl border px-3 py-1 gap-3">
                         <div className="flex items-center gap-2 min-w-0">
                           <span>🔗</span>
                           <a href={u} target="_blank" rel="noreferrer" className="truncate text-indigo-600 hover:underline">
@@ -307,10 +307,10 @@ export default function AnnouncementModal({
             )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" size="md" onClick={onClose}>
+            <Button type="button" variant="outline" size="md" onClick={onClose} className="!rounded-full">
               Hủy
             </Button>
-            <Button disabled={loading || !content.trim()} variant="primary" size="md">
+            <Button disabled={loading || !content.trim()} variant="primary" size="md" className="!rounded-full">
               Đăng
             </Button>
           </div>

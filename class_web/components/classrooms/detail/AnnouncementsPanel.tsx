@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import api from "@/api/client";
 import useClassroomRealtime from "@/hooks/useClassroomRealtime";
-import { MoreHorizontal, ChevronDown, ChevronRight, Clock, Repeat2, Megaphone, ArrowLeft } from "lucide-react";
+import { MoreHorizontal, ChevronDown, Clock, Repeat2, Megaphone, ArrowLeft, Users } from "lucide-react";
 import RichTextEditor from "@/components/common/RichTextEditor";
 import Button from "@/components/ui/Button";
 import { toast } from "react-hot-toast";
@@ -219,55 +219,56 @@ export default function AnnouncementsPanel({
           {items.map((a) => (
             <li
               key={a.id}
-              className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-md transition p-4"
+              className="rounded-2xl border border-slate-200 dark:border-gray-800 bg-slate-50 dark:bg-zinc-900/70 overflow-hidden"
             >
-              <div className="flex items-start gap-3">
-                {a.createdByAvatar ? (
-                  <img
-                    src={resolveAvatar(a.createdByAvatar) || a.createdByAvatar}
-                    alt={a.createdByName || "Giáo viên"}
-                    className="h-10 w-10 shrink-0 rounded-full object-cover border border-white/60 shadow"
-                  />
-                ) : (
-                  <div className="h-10 w-10 shrink-0 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-semibold shadow">
-                    {getInitials(a.createdByName || "G V")}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{a.createdByName || "Giáo viên"}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" /> {new Date(a.createdAt).toLocaleString()}
+              <div className="p-4">
+                <div className="flex items-start gap-3">
+                  {a.createdByAvatar ? (
+                    <img
+                      src={resolveAvatar(a.createdByAvatar) || a.createdByAvatar}
+                      alt={a.createdByName || "Giáo viên"}
+                      className="h-11 w-11 shrink-0 rounded-full object-cover border border-white/70 shadow"
+                    />
+                  ) : (
+                    <div className="h-11 w-11 shrink-0 rounded-full bg-indigo-600 text-white flex items-center justify-center text-base font-semibold shadow">
+                      {getInitials(a.createdByName || "G V")}
                     </div>
-                  </div>
-                  {isTeacher && (
-                    <details className="relative">
-                      <summary className="list-none p-1.5 rounded hover:bg-gray-100 text-gray-500 cursor-pointer">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </summary>
-                      <div className="absolute right-0 mt-1 w-40 rounded-md border bg-white shadow p-1 z-10">
-                        <button onClick={() => setEditing({ id: a.id, content: a.content })} className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100">Chỉnh sửa</button>
-                        <button onClick={() => handleDelete(a.id)} className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 text-red-600">Xóa</button>
-                      </div>
-                    </details>
                   )}
-                  </div>
-                  <div className="prose prose-sm max-w-none dark:prose-invert mt-2" dangerouslySetInnerHTML={{ __html: a.content }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{a.createdByName || "Giáo viên"}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" /> {new Date(a.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      {isTeacher && (
+                        <details className="relative">
+                          <summary className="list-none p-1.5 rounded-full hover:bg-white/80 dark:hover:bg-zinc-800 text-gray-500 cursor-pointer">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </summary>
+                          <div className="absolute right-0 mt-1 w-40 rounded-md border bg-white shadow p-1 z-10">
+                            <button onClick={() => setEditing({ id: a.id, content: a.content })} className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100">Chỉnh sửa</button>
+                            <button onClick={() => handleDelete(a.id)} className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 text-red-600">Xóa</button>
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                    <div className="prose prose-sm max-w-none dark:prose-invert mt-2 text-gray-800 dark:text-gray-100 leading-relaxed" dangerouslySetInnerHTML={{ __html: a.content }} />
 
-                    <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                       {!a.isForAll && a.targetUserIds && a.targetUserIds.length > 0 && (
-                        <span className="px-2 py-0.5 rounded-full bg-gray-100">Chỉ định: {a.targetUserIds.length} học viên</span>
+                        <span className="px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-zinc-800">Chỉ định: {a.targetUserIds.length} học viên</span>
                       )}
                     </div>
 
-                  <div className="mt-2">
-                    <AnnouncementFiles announcementId={a.id} initialItems={(a as any).materials} />
+                    <div className="mt-3">
+                      <AnnouncementFiles announcementId={a.id} initialItems={(a as any).materials} />
+                    </div>
                   </div>
-
-                  <AnnouncementComments announcementId={a.id} />
                 </div>
               </div>
+              <AnnouncementComments announcementId={a.id} />
             </li>
           ))}
         </ul>
@@ -679,7 +680,11 @@ function AnnouncementComments({ announcementId }: { announcementId: string }) {
   const [text, setText] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [sending, setSending] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const me = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
+  const meName = me.fullName || 'Tôi';
+  const meAvatar = me.avatar ? resolveAvatar(me.avatar) || me.avatar : undefined;
+  const meInitials = getInitials(meName);
 
   useEffect(() => {
     if (!loaded) {
@@ -714,12 +719,11 @@ function AnnouncementComments({ announcementId }: { announcementId: string }) {
     const content = text.trim(); if (!content) return;
     try {
       setSending(true);
-      const me = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
       const optimistic = {
         id: `local-${Date.now()}`,
         announcementId,
         userId: me.id || 'me',
-        userName: me.fullName || 'Tôi',
+        userName: meName,
         userAvatar: me.avatar,
         content,
         createdAt: new Date().toISOString()
@@ -740,46 +744,59 @@ function AnnouncementComments({ announcementId }: { announcementId: string }) {
   const displayItems = expanded ? items : items.slice(Math.max(0, items.length - 3));
 
   return (
-    <div className="mt-3 border-t border-gray-100 dark:border-gray-800 pt-2">
-      <button type="button" onClick={() => setExpanded((v) => !v)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        <span>Nhận xét ({items.length})</span>
+    <div className="border-t border-slate-200 dark:border-gray-800 bg-white/70 dark:bg-zinc-900/60">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300"
+      >
+        <Users className="h-4 w-4" />
+        <span>{items.length} nhận xét về lớp học</span>
+        <ChevronDown className={`ml-auto h-4 w-4 transition-transform ${expanded ? "" : "-rotate-90"}`} />
       </button>
 
-      <div className={`${expanded ? 'max-h-64 overflow-y-auto pr-1' : ''} mt-2 space-y-2`}>
+      <div className={`px-4 ${expanded ? "pb-2" : "pb-3"} ${expanded ? "max-h-64 overflow-y-auto pr-1" : ""} space-y-3`}>
         {displayItems.map((c, i) => {
           const avatarUrl = c.userAvatar ? resolveAvatar(c.userAvatar) || c.userAvatar : undefined;
           return (
-          <div key={`${c.id || 'local'}-${i}`} className="flex items-start gap-2 text-sm">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={c.userName || "U"} className="h-7 w-7 shrink-0 rounded-full object-cover border border-white/30" />
-            ) : (
-              <div className="h-7 w-7 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 flex items-center justify-center text-[11px] font-semibold">
-                {getInitials(c.userName || 'U')}
+            <div key={`${c.id || 'local'}-${i}`} className="flex items-start gap-3 text-sm">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={c.userName || "U"} className="h-8 w-8 shrink-0 rounded-full object-cover border border-white/40" />
+              ) : (
+                <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 flex items-center justify-center text-xs font-semibold">
+                  {getInitials(c.userName || 'U')}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                  {c.userName || "U"}{" "}
+                  <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                    • {new Date(c.createdAt).toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit" })}
+                  </span>
+                </div>
+                <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{c.content}</div>
               </div>
-            )}
-            <div className="flex-1">
-              <div className="text-xs text-gray-500 mb-0.5">{c.userName} • {new Date(c.createdAt).toLocaleString()}</div>
-              <div>{c.content}</div>
             </div>
-          </div>
-        )})}
-        {items.length > displayItems.length && !expanded && (
-          <button type="button" onClick={() => setExpanded(true)} className="text-xs text-indigo-600 hover:underline">
-            Xem thêm {items.length - displayItems.length} nhận xét
-          </button>
-        )}
+          );
+        })}
         {items.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">Chưa có nhận xét nào.</div>}
       </div>
 
-      <form onSubmit={send} className="flex items-center gap-2 mt-2">
+      <form onSubmit={send} className="flex items-center gap-2 px-4 pb-4">
+        {meAvatar ? (
+          <img src={meAvatar} alt={meName} className="h-9 w-9 rounded-full object-cover border border-white/60" />
+        ) : (
+          <div className="h-9 w-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold">
+            {meInitials}
+          </div>
+        )}
         <input
           value={text}
           onChange={(e)=>setText(e.target.value)}
-          placeholder="Thêm nhận xét..."
-          className="flex-1 rounded-full border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100"
+          placeholder="Thêm nhận xét trong lớp học..."
+          className="flex-1 rounded-full border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100"
         />
-        <Button variant="primary" size="sm" disabled={sending || !text.trim()}>Gửi</Button>
+        <Button variant="primary" size="md" disabled={sending || !text.trim()} className="!rounded-full">Gửi</Button>
       </form>
     </div>
   );
