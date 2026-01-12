@@ -214,6 +214,8 @@ namespace class_api.Controllers
                     s.UserId,
                     StudentName = s.User.FullName,
                     Email = s.User.Email,
+                    s.FileKey,
+                    s.ContentType,
                     s.FileSize,
                     s.SubmittedAt,
                     Grade = _db.Grades
@@ -243,6 +245,8 @@ namespace class_api.Controllers
                 item.Email,
                 item.FileSize,
                 item.SubmittedAt,
+                fileKey = item.FileKey,
+                contentType = item.ContentType,
                 grade = item.Grade?.Score,
                 feedback = item.Grade?.Feedback,
                 gradeStatus = item.Grade?.Status,

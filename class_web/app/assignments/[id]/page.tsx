@@ -2,7 +2,18 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { MessageSquare, CheckCircle2 } from "lucide-react";
+import {
+  MessageSquare,
+  CheckCircle2,
+  File as FileIcon,
+  FileText,
+  FileImage,
+  FileVideo,
+  FileAudio,
+  FileArchive,
+  FileSpreadsheet,
+  FileCode,
+} from "lucide-react";
 import api from "@/api/client";
 import { resolveAvatar } from "@/utils/resolveAvatar";
 import { getSignalR } from "@/lib/signalr";
@@ -88,6 +99,81 @@ export default function AssignmentDetailPage() {
       member?.picture;
     if (!raw) return undefined;
     return resolveAvatar(raw) || raw;
+  }
+
+  function getOriginalNameFromKey(key?: string) {
+    if (!key) return "";
+    const lastSlash = key.lastIndexOf("/");
+    const basename = lastSlash >= 0 ? key.slice(lastSlash + 1) : key;
+    const timePrefix = /^\d{8}-\d{6}-/;
+    if (timePrefix.test(basename)) return basename.replace(timePrefix, "");
+    const parts = basename.split("_");
+    return parts.length > 1 ? parts.slice(1).join("_") : basename;
+  }
+
+  function getFileExtension(name?: string) {
+    if (!name) return "";
+    const clean = name.split("?")[0];
+    const parts = clean.split(".");
+    if (parts.length < 2) return "";
+    return parts.pop()!.toLowerCase();
+  }
+
+  function getFileTypeKey(name?: string, contentType?: string) {
+    const type = (contentType || "").toLowerCase();
+    if (type.startsWith("image/")) return "image";
+    if (type.startsWith("video/")) return "video";
+    if (type.startsWith("audio/")) return "audio";
+    if (type.includes("pdf")) return "pdf";
+    if (type.includes("wordprocessing") || type.includes("msword")) return "doc";
+    if (type.includes("spreadsheet") || type.includes("excel")) return "xls";
+    if (type.includes("presentation") || type.includes("powerpoint")) return "ppt";
+    if (type.includes("zip") || type.includes("rar") || type.includes("7z")) return "archive";
+    const ext = getFileExtension(name);
+    return ext;
+  }
+
+  function getFileIcon(name?: string, contentType?: string) {
+    const key = getFileTypeKey(name, contentType);
+    if (key === "image" || ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(key)) return FileImage;
+    if (key === "video" || ["mp4", "mov", "avi", "mkv", "webm"].includes(key)) return FileVideo;
+    if (key === "audio" || ["mp3", "wav", "ogg", "m4a"].includes(key)) return FileAudio;
+    if (key === "archive" || ["zip", "rar", "7z", "tar", "gz"].includes(key)) return FileArchive;
+    if (key === "xls" || ["xls", "xlsx", "csv", "ods"].includes(key)) return FileSpreadsheet;
+    if (["js", "ts", "tsx", "jsx", "py", "java", "cs", "cpp", "c", "html", "css", "json", "xml", "yaml", "yml", "sql"].includes(key)) {
+      return FileCode;
+    }
+    if (key === "doc" || ["doc", "docx", "ppt", "pptx", "pdf", "txt", "rtf", "odt", "odp"].includes(key)) {
+      return FileText;
+    }
+    return FileIcon;
+  }
+
+  function getFileIconClass(name?: string, contentType?: string) {
+    const key = getFileTypeKey(name, contentType);
+    if (key === "image" || ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(key)) {
+      return "text-emerald-600 dark:text-emerald-300";
+    }
+    if (key === "video" || ["mp4", "mov", "avi", "mkv", "webm"].includes(key)) {
+      return "text-rose-600 dark:text-rose-300";
+    }
+    if (key === "audio" || ["mp3", "wav", "ogg", "m4a"].includes(key)) {
+      return "text-amber-600 dark:text-amber-300";
+    }
+    if (key === "doc" || ["doc", "docx", "rtf", "odt"].includes(key)) {
+      return "text-blue-600 dark:text-blue-300";
+    }
+    if (key === "xls" || ["xls", "xlsx", "csv", "ods"].includes(key)) {
+      return "text-emerald-700 dark:text-emerald-300";
+    }
+    if (key === "ppt" || ["ppt", "pptx", "odp"].includes(key)) {
+      return "text-orange-600 dark:text-orange-300";
+    }
+    if (key === "pdf") return "text-red-600 dark:text-red-300";
+    if (key === "archive" || ["zip", "rar", "7z", "tar", "gz"].includes(key)) {
+      return "text-violet-600 dark:text-violet-300";
+    }
+    return "text-indigo-600 dark:text-indigo-300";
   }
 
   function isFileTypeAllowed(file: File) {
@@ -324,6 +410,8 @@ export default function AssignmentDetailPage() {
       const email = (s.email || s.Email || "").toLowerCase();
       const name = s.studentName || s.StudentName || email || "";
       const size = s.fileSize ?? s.FileSize ?? 0;
+      const fileKey = s.fileKey ?? s.FileKey ?? "";
+      const contentType = s.contentType ?? s.ContentType ?? "";
       const at = new Date(s.submittedAt || s.SubmittedAt).getTime();
       const id = s.id || s.Id;
       const key = userId || email || name;
@@ -345,7 +433,7 @@ export default function AssignmentDetailPage() {
           feedback,
           returnedFileKey,
           returnedFileName,
-          files: [{ id, size, at, grade: gradeScore, gradeStatus, feedback }],
+          files: [{ id, size, at, fileKey, contentType, grade: gradeScore, gradeStatus, feedback }],
         });
       } else {
         const g = map.get(key);
@@ -361,7 +449,7 @@ export default function AssignmentDetailPage() {
         if (gradeStatus && !g.gradeStatus) g.gradeStatus = gradeStatus;
         if (returnedFileKey && !g.returnedFileKey) g.returnedFileKey = returnedFileKey;
         if (returnedFileName && !g.returnedFileName) g.returnedFileName = returnedFileName;
-        g.files.push({ id, size, at, grade: gradeScore, gradeStatus, feedback });
+        g.files.push({ id, size, at, fileKey, contentType, grade: gradeScore, gradeStatus, feedback });
       }
     });
     // sort files per group by time desc
@@ -408,6 +496,34 @@ export default function AssignmentDetailPage() {
   }, [students, byEmail, filter, rosterQuery]);
 
   const selectedGroup = useMemo(()=> byEmail.get(selectedEmail), [byEmail, selectedEmail]);
+  const selectedStudent = useMemo(() => {
+    return students.find((s) => (s.userId || "").toString() === selectedEmail) || null;
+  }, [students, selectedEmail]);
+  const selectedAvatar = selectedStudent ? getAvatar(selectedStudent) : undefined;
+  const detailIsLate = !!(dueTs && selectedGroup?.latestAt && selectedGroup.latestAt > dueTs);
+  const detailSubmitLabel = selectedGroup ? (detailIsLate ? "Nộp muộn" : "Đã nộp") : "Chưa nộp";
+  const detailSubmitClass = selectedGroup
+    ? detailIsLate
+      ? "bg-rose-50 text-rose-600 border-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300"
+      : "bg-emerald-50 text-emerald-700 border-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300"
+    : "bg-gray-100 text-gray-700 border-gray-200 dark:border-gray-800 dark:bg-zinc-800 dark:text-gray-200";
+  const detailGradeLabel = selectedGroup
+    ? selectedGroup.gradeStatus === "returned"
+      ? `Điểm: ${selectedGroup.grade ?? "-"}`
+      : selectedGroup.grade != null
+      ? `Điểm: ${selectedGroup.grade}`
+      : selectedGroup.gradeStatus === "pending"
+      ? "Đang chấm"
+      : "Chưa chấm"
+    : "Chưa chấm";
+  const detailGradeClass =
+    selectedGroup?.gradeStatus === "returned"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300"
+      : selectedGroup?.grade != null
+      ? "bg-indigo-50 text-indigo-700 border-indigo-100 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-300"
+      : selectedGroup?.gradeStatus === "pending"
+      ? "bg-amber-50 text-amber-700 border-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300"
+      : "bg-gray-100 text-gray-700 border-gray-200 dark:border-gray-800 dark:bg-zinc-800 dark:text-gray-200";
 
   useEffect(()=>{
     // Auto select first in roster for teacher view
@@ -576,15 +692,19 @@ export default function AssignmentDetailPage() {
                       : gradeStatus === "pending"
                       ? "Đang chấm"
                       : "Chưa chấm";
-                  const lastSlash = (key||'').lastIndexOf('/')
-                  const basename = lastSlash >= 0 ? key.slice(lastSlash+1) : key;
-                  const parts = (basename||'').split('_');
-                  const original = parts.length > 1 ? parts.slice(1).join('_') : basename;
+                  const original = getOriginalNameFromKey(key) || "Tệp";
+                  const Icon = getFileIcon(original);
+                  const iconClass = getFileIconClass(original);
                   return (
                     <div key={s.id || s.Id || i} className="flex items-center justify-between rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2">
-                      <div className="min-w-0 pr-3">
-                        <div className="truncate text-gray-800 dark:text-gray-200">{original || 'Tệp'}</div>
-                        <div className="text-xs text-gray-500">{ts} • {(size/1024).toFixed(1)} KB</div>
+                      <div className="flex items-start gap-3 min-w-0 pr-3">
+                        <div className={`h-10 w-10 rounded-lg bg-gray-100 dark:bg-zinc-800 ${iconClass} flex items-center justify-center shrink-0`}>
+                          <Icon size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white break-words">{original}</div>
+                          <div className="text-xs text-gray-500">{ts} • {(size/1024).toFixed(1)} KB</div>
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`px-2 py-1 rounded-md text-xs ${isReturned ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"}`}>
@@ -592,7 +712,7 @@ export default function AssignmentDetailPage() {
                         </span>
                         {isReturned && returnedFileKey && (
                           <button
-                            className="shrink-0 rounded-md border px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-800"
+                            className="shrink-0 rounded-full border px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-800"
                             onClick={() =>
                               openFileViewer({ key: returnedFileKey, name: returnedFileName || "Bài đã chấm" })
                             }
@@ -630,37 +750,49 @@ export default function AssignmentDetailPage() {
 
       {/* Teacher-only submissions table */}
       {isTeacher && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-0 overflow-hidden">
-          <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-            <div className="text-lg font-semibold">Bài tập của học viên</div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700">Đã nộp: {stats.submitted}</span>
-              <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">Chưa nộp: {stats.notSubmitted}</span>
-              <span className="px-2 py-1 rounded bg-indigo-50 text-indigo-700">Đã chấm: {stats.graded}</span>
-              {dueTs && (<span className="px-2 py-1 rounded bg-rose-50 text-rose-600">Nộp muộn: {stats.late}</span>)}
-              <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">Tổng: {stats.total}</span>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-0 overflow-hidden shadow-sm">
+          <div className="px-6 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-3 bg-gray-50/70 dark:bg-zinc-900/60">
+            <div className="text-lg font-semibold text-gray-900 dark:text-white">Bài tập của học viên</div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="inline-flex items-center rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
+                Đã nộp: {stats.submitted}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-gray-700 dark:border-gray-800 dark:bg-zinc-800 dark:text-gray-200">
+                Chưa nộp: {stats.notSubmitted}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-indigo-700 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-300">
+                Đã chấm: {stats.graded}
+              </span>
+              {dueTs && (
+                <span className="inline-flex items-center rounded-full border border-rose-100 bg-rose-50 px-2.5 py-1 text-rose-600 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
+                  Nộp muộn: {stats.late}
+                </span>
+              )}
+              <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-gray-700 dark:border-gray-800 dark:bg-zinc-800 dark:text-gray-200">
+                Tổng: {stats.total}
+              </span>
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3">
             {/* Left roster */}
-            <div className="border-r border-gray-100 dark:border-gray-800 p-4 space-y-3">
+            <div className="border-r border-gray-100 dark:border-gray-800 p-5 space-y-3 bg-gray-50/40 dark:bg-zinc-900/40">
               <div className="space-y-2">
                 <input
                   value={rosterQuery}
                   onChange={(e) => setRosterQuery(e.target.value)}
                   placeholder="Tìm học viên..."
-                  className="w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                  className="w-full rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 py-2 text-sm outline-none focus:border-indigo-400"
                 />
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-medium">Tất cả học viên</div>
-                  <select value={filter} onChange={(e)=> setFilter(e.target.value as any)} className="text-xs border rounded-md px-2 py-1 bg-white dark:bg-zinc-900">
+                  <select value={filter} onChange={(e)=> setFilter(e.target.value as any)} className="text-xs border rounded-full px-3 py-1 bg-white dark:bg-zinc-900 focus:outline-none">
                     <option value="all">Tất cả</option>
                     <option value="submitted">Đã nộp</option>
                     <option value="assigned">Chưa nộp</option>
                   </select>
                 </div>
               </div>
-              <div className="space-y-1 max-h-[60vh] overflow-auto pr-1">
+              <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
                 {roster.map((r:any, idx:number)=>{
                   const email = (r.email||'').toLowerCase();
                   const uid = (r.userId||'').toString();
@@ -680,7 +812,7 @@ export default function AssignmentDetailPage() {
                         setFeedbackInput("");
                         setReturnFile(null);
                       }}
-                      className={`w-full text-left rounded-lg border px-3 py-3 text-sm transition ${active ? 'border-indigo-500 bg-indigo-50 dark:bg-zinc-800' : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-zinc-900'}`}
+                      className={`w-full text-left rounded-lg border px-3 py-3 text-sm transition ${active ? 'border-indigo-500 bg-indigo-50/80 shadow-sm dark:bg-zinc-900' : 'border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-zinc-950 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm'}`}
                     >
                       <div className="flex items-start gap-3">
                         {avatarSrc ? (
@@ -719,9 +851,9 @@ export default function AssignmentDetailPage() {
                           {g && (
                             <div className="text-xs text-gray-500">
                               {g.gradeStatus === "returned"
-                                ? `Đã trả • ${g.grade ?? "-"}`
+                                ? `Đã trả • Điểm: ${g.grade ?? "-"}`
                                 : g.grade != null
-                                ? `Đã chấm • ${g.grade}`
+                                ? `Đã chấm • Điểm: ${g.grade}`
                                 : g.gradeStatus === "pending"
                                 ? "Đang chấm"
                                 : "Chưa chấm"}
@@ -741,39 +873,73 @@ export default function AssignmentDetailPage() {
                 <div className="text-gray-500">Chọn một học viên để xem chi tiết.</div>
               ) : (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xl font-semibold flex items-center gap-2">
-                        {students.find(s=> (s.userId||'').toString()===selectedEmail)?.name}
-                        {!selectedGroup && (
-                          <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 text-xs">Chưa nộp</span>
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950/40 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {selectedAvatar ? (
+                          <img
+                            src={selectedAvatar}
+                            alt={selectedStudent?.name || "Học viên"}
+                            className="h-10 w-10 rounded-full object-cover border border-white/30"
+                          />
+                        ) : (
+                          <span className="h-10 w-10 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 flex items-center justify-center text-sm font-semibold">
+                            {getInitials(selectedStudent?.name || selectedStudent?.email || "?")}
+                          </span>
                         )}
+                        <div className="min-w-0">
+                          <div className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                            {selectedStudent?.name || "Học viên"}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">{selectedStudent?.email || "-"}</div>
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500">{students.find(s=> (s.userId||'').toString()===selectedEmail)?.email || '-'}</div>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {selectedGroup?.gradeStatus === "returned"
-                        ? `Đã trả • ${selectedGroup.grade ?? "-"}`
-                        : selectedGroup && selectedGroup.grade != null
-                        ? `Đã chấm • ${selectedGroup.grade}`
-                        : selectedGroup?.gradeStatus === "pending"
-                        ? "Đang chấm"
-                        : "Chưa chấm"}
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 ${detailSubmitClass}`}>
+                          {detailSubmitLabel}
+                        </span>
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 ${detailGradeClass}`}>
+                          {detailGradeLabel}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <div className="text-sm font-medium mb-2">Tệp đính kèm</div>
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950/40 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-sm font-semibold">Tệp đính kèm</div>
+                      {selectedGroup?.files?.length ? (
+                        <div className="text-xs text-gray-500">{selectedGroup.files.length} tệp</div>
+                      ) : null}
+                    </div>
                     {selectedGroup?.files?.length ? (
                       <div className="grid sm:grid-cols-2 gap-2">
                         {selectedGroup.files.map((f:any, i:number)=> {
                           const late = !!(dueTs && f.at > dueTs);
+                          const fileKey = f.fileKey || f.FileKey || "";
+                          const contentType = f.contentType || f.ContentType || "";
+                          const fileName = getOriginalNameFromKey(fileKey) || `Tệp #${i + 1}`;
+                          const Icon = getFileIcon(fileName, contentType);
+                          const iconClass = getFileIconClass(fileName, contentType);
                           return (
-                            <div key={i} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 flex items-center justify-between">
-                              <div className="text-xs truncate">#{i+1} • {(f.size/1024).toFixed(1)} KB {late && <span className="ml-2 inline-flex items-center rounded-full bg-rose-50 text-rose-600 px-2 py-0.5">Muộn</span>}</div>
+                            <div key={i} className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-3 py-2 flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`h-10 w-10 rounded-lg bg-gray-100 dark:bg-zinc-800 ${iconClass} flex items-center justify-center shrink-0`}>
+                                  <Icon size={18} />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white break-words">
+                                    {fileName}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {(f.size/1024).toFixed(1)} KB
+                                    {late && <span className="ml-2 text-rose-600">Muộn</span>}
+                                  </div>
+                                </div>
+                              </div>
                               <button
-                                className="text-xs rounded-md border px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800"
-                                onClick={() => openFileViewer({ submissionId: String(f.id) })}
+                                className="text-xs rounded-md border bg-white dark:bg-zinc-900 px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 shrink-0"
+                                onClick={() => openFileViewer({ submissionId: String(f.id), name: fileName })}
                               >
                                 Xem
                               </button>
@@ -786,9 +952,9 @@ export default function AssignmentDetailPage() {
                     )}
                   </div>
 
-                  <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm font-medium">Chấm điểm</div>
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950/40 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-sm font-semibold">Chấm điểm</div>
                       {selectedGroup?.gradeStatus === "returned" ? (
                         <span className="inline-flex items-center gap-1 text-xs rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5">
                           <CheckCircle2 size={14} /> Đã trả
@@ -803,12 +969,31 @@ export default function AssignmentDetailPage() {
                         </span>
                       ) : null}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input type="number" placeholder={`0..${assignment?.maxPoints ?? 100}`} value={gradeInput as any} onChange={(e)=> setGradeInput(e.target.value)} className="w-28 rounded-md border px-3 py-2 text-sm bg-white dark:bg-zinc-950" />
-                      <input type="text" placeholder="Nhận xét (tuỳ chọn)" value={feedbackInput} onChange={(e)=> setFeedbackInput(e.target.value)} className="flex-1 min-w-[220px] rounded-md border px-3 py-2 text-sm bg-white dark:bg-zinc-950" />
+                    <div className="grid gap-3 sm:grid-cols-[120px,1fr]">
+                      <label className="space-y-1">
+                        <div className="text-xs font-medium text-gray-500">Điểm</div>
+                        <input
+                          type="number"
+                          placeholder={`0..${assignment?.maxPoints ?? 100}`}
+                          value={gradeInput as any}
+                          onChange={(e)=> setGradeInput(e.target.value)}
+                          className="w-full rounded-full border px-4 py-2 text-sm bg-white dark:bg-zinc-950"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <div className="text-xs font-medium text-gray-500">Nhận xét</div>
+                        <input
+                          type="text"
+                          placeholder="Nhận xét (tuỳ chọn)"
+                          value={feedbackInput}
+                          onChange={(e)=> setFeedbackInput(e.target.value)}
+                          className="w-full rounded-full border px-4 py-2 text-sm bg-white dark:bg-zinc-950"
+                        />
+                      </label>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <label className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800">
                         <input
                           type="file"
                           className="hidden"
@@ -819,27 +1004,28 @@ export default function AssignmentDetailPage() {
                           }}
                         />
                         + Chọn file đã chấm (tuỳ chọn)
-                      </label>
-                      {returnFile && (
-                        <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[240px]">
-                          {returnFile.name}
-                        </span>
-                      )}
-                      {selectedGroup?.returnedFileKey && (
-                        <button
-                          className="text-xs rounded-md border px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
-                          onClick={() =>
-                            openFileViewer({
-                              key: selectedGroup.returnedFileKey,
-                              name: selectedGroup.returnedFileName || "Bài đã chấm",
-                            })
-                          }
-                        >
-                          Xem bài đã chấm
-                        </button>
-                      )}
+                        </label>
+                        {returnFile && (
+                          <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[240px]">
+                            {returnFile.name}
+                          </span>
+                        )}
+                        {selectedGroup?.returnedFileKey && (
+                          <button
+                            className="text-xs rounded-full border px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            onClick={() =>
+                              openFileViewer({
+                                key: selectedGroup.returnedFileKey,
+                                name: selectedGroup.returnedFileName || "Bài đã chấm",
+                              })
+                            }
+                          >
+                            Xem bài đã chấm
+                          </button>
+                        )}
+                      </div>
                       <button
-                        className="rounded-md bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 text-sm shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                         disabled={!selectedGroup?.files?.length}
                         onClick={async () => {
                           const raw = String(gradeInput ?? "").trim();
