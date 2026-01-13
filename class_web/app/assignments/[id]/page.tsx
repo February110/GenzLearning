@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { Paperclip } from "lucide-react";
 import {
   MessageSquare,
   CheckCircle2,
@@ -415,6 +416,63 @@ export default function AssignmentDetailPage() {
     openFileViewer({ key, name });
   }
 
+  function downloadGradesFile() {
+    if (!students.length) {
+      toast.error("Chưa có danh sách học viên");
+      return;
+    }
+    const titleRaw = assignment?.title || assignment?.Title || `assignment-${id}`;
+    const safeTitle = String(titleRaw).replace(/[\\/:*?"<>|]/g, "_").trim() || `assignment-${id}`;
+    const rowsHtml = students
+      .map((s: any) => {
+        const g = byEmail.get((s.userId || "").toString());
+        const submitted = !!g;
+        const isLate = !!(submitted && dueTs && g?.latestAt > dueTs);
+        const score = submitted ? (g.grade ?? "") : 0;
+        const status = submitted ? (isLate ? "Nộp muộn" : "Đã nộp") : "Chưa nộp";
+        return `
+          <tr>
+            <td>${String(s.name || "").replace(/</g, "&lt;")}</td>
+            <td>${String(s.email || "").replace(/</g, "&lt;")}</td>
+            <td style="text-align:center;">${score === "" ? "" : String(score)}</td>
+            <td>${status}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+        </head>
+        <body>
+          <table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="background-color:#00B0F0;color:#000;font-weight:bold;">Họ và tên</th>
+                <th style="background-color:#00B0F0;color:#000;font-weight:bold;">Email</th>
+                <th style="background-color:#00B0F0;color:#000;font-weight:bold;">Điểm</th>
+                <th style="background-color:#00B0F0;color:#000;font-weight:bold;">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeTitle}-diem.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Removed assignment-level CommentAdded listener. CommentsPanel handles thread-level realtime.
 
   // Group submissions by student so multiple files show as one row (Google Classroom style)
@@ -553,8 +611,8 @@ export default function AssignmentDetailPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-6">
-        <h1 className="text-2xl font-bold">{assignment.title}</h1>
-        <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: assignment.instructions || 'Không có hướng dẫn' }} />
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{assignment.title}</h1>
+        <div className="prose prose-sm max-w-none dark:prose-invert mt-2 text-gray-800 dark:text-gray-100 leading-relaxed" dangerouslySetInnerHTML={{ __html: assignment.instructions || 'Không có hướng dẫn' }} />
         <div className="text-sm text-gray-500 dark:text-gray-400 mt-2">Hạn: {assignment.dueAt || assignment.DueAt ? new Date(assignment.dueAt || assignment.DueAt).toLocaleString() : 'Không có'}</div>
 
         {/* Tài liệu đính kèm */}
@@ -792,6 +850,14 @@ export default function AssignmentDetailPage() {
               <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-gray-700 dark:border-gray-800 dark:bg-zinc-800 dark:text-gray-200">
                 Tổng: {stats.total}
               </span>
+              <button
+                type="button"
+                onClick={downloadGradesFile}
+                disabled={!students.length}
+                className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Xuất điểm
+              </button>
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3">
@@ -996,65 +1062,68 @@ export default function AssignmentDetailPage() {
                         </span>
                       ) : null}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-[120px,1fr]">
-                      <label className="space-y-1">
-                        <div className="text-xs font-medium text-gray-500">Điểm</div>
-                        <input
-                          type="number"
-                          placeholder={`0..${assignment?.maxPoints ?? 100}`}
-                          value={gradeInput as any}
-                          onChange={(e)=> setGradeInput(e.target.value)}
-                          className="w-full rounded-full border px-4 py-2 text-sm bg-white dark:bg-zinc-950"
-                        />
-                      </label>
-                      <label className="space-y-1">
-                        <div className="text-xs font-medium text-gray-500">Nhận xét</div>
-                        <input
-                          type="text"
-                          placeholder="Nhận xét (tuỳ chọn)"
-                          value={feedbackInput}
-                          onChange={(e)=> setFeedbackInput(e.target.value)}
-                          className="w-full rounded-full border px-4 py-2 text-sm bg-white dark:bg-zinc-950"
-                        />
-                      </label>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                      <label className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800">
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0] || null;
-                            setReturnFile(f);
-                            (e.target as HTMLInputElement).value = "";
-                          }}
-                        />
-                        + Chọn file đã chấm (tuỳ chọn)
+                    <div className="grid gap-4">
+                      <div className="grid gap-3 grid-cols-[100px_minmax(0,1fr)] items-end">
+                        <label className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500">Điểm</div>
+                          <input
+                            type="number"
+                            placeholder={`0..${assignment?.maxPoints ?? 100}`}
+                            value={gradeInput as any}
+                            onChange={(e)=> setGradeInput(e.target.value)}
+                            className="w-full rounded-full border px-4 py-2 text-sm bg-white dark:bg-zinc-950"
+                          />
                         </label>
-                        {returnFile && (
-                          <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[240px]">
-                            {returnFile.name}
-                          </span>
-                        )}
-                        {selectedGroup?.returnedFileKey && (
-                          <button
-                            className="text-xs rounded-full border px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
-                            onClick={() =>
-                              openFileViewer({
-                                key: selectedGroup.returnedFileKey,
-                                name: selectedGroup.returnedFileName || "Bài đã chấm",
-                              })
-                            }
-                          >
-                            Xem bài đã chấm
-                          </button>
-                        )}
+                        <label className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500">Nhận xét</div>
+                          <input
+                            type="text"
+                            placeholder="Nhận xét"
+                            value={feedbackInput}
+                            onChange={(e)=> setFeedbackInput(e.target.value)}
+                            className="w-full rounded-full border px-4 py-2 text-sm bg-white dark:bg-zinc-950"
+                          />
+                        </label>
                       </div>
-                      <button
-                        className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 text-sm shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                        disabled={!selectedGroup?.files?.length}
-                        onClick={async () => {
+                      <div className="grid gap-3 md:grid-cols-[1fr_auto] items-center">
+                        <div className="flex flex-wrap items-center gap-2">
+                        
+                          <label className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800">
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0] || null;
+                                setReturnFile(f);
+                                (e.target as HTMLInputElement).value = "";
+                              }}
+                            />
+                            <Paperclip className="h-4 w-4 text-gray-600" />
+                            Chọn file đã chấm
+                          </label>
+                          {returnFile && (
+                            <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[240px]">
+                              {returnFile.name}
+                            </span>
+                          )}
+                          {selectedGroup?.returnedFileKey && (
+                            <button
+                              className="text-xs rounded-full border px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+                              onClick={() =>
+                                openFileViewer({
+                                  key: selectedGroup.returnedFileKey,
+                                  name: selectedGroup.returnedFileName || "Bài đã chấm",
+                                })
+                              }
+                            >
+                              Xem bài đã chấm
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          className="w-full md:w-auto rounded-full bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 text-sm shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                          disabled={!selectedGroup?.files?.length}
+                          onClick={async () => {
                           const raw = String(gradeInput ?? "").trim();
                           const inputVal = raw === "" ? NaN : Number(raw);
                           const score = !isNaN(inputVal) ? inputVal : selectedGroup?.grade;
@@ -1097,9 +1166,10 @@ export default function AssignmentDetailPage() {
                             );
                           }
                         }}
-                      >
-                        Chấm điểm
-                      </button>
+                        >
+                          Chấm điểm
+                        </button>
+                      </div>
                     </div>
                     {selectedGroup?.feedback && (
                       <div className="mt-3 text-xs">

@@ -239,7 +239,8 @@ export default function AnnouncementsPanel({
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{a.createdByName || "Giáo viên"}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5" /> {new Date(a.createdAt).toLocaleString()}
+                          <Clock className="h-3.5 w-3.5" />{" "}
+                          {new Date(a.createdAt).toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit" })}
                         </div>
                       </div>
                       {isTeacher && (
