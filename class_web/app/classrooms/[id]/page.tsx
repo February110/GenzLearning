@@ -40,6 +40,9 @@ export default function ClassroomDetailPage() {
     maxPoints: number;
     allowedFileTypes: string;
     maxFileSizeMb: number | "";
+    groupEnabled: boolean;
+    groupMinMembers: number | "";
+    groupMaxMembers: number | "";
   }>({
     title: "",
     instructions: "",
@@ -47,6 +50,9 @@ export default function ClassroomDetailPage() {
     maxPoints: 100,
     allowedFileTypes: "",
     maxFileSizeMb: "",
+    groupEnabled: false,
+    groupMinMembers: "",
+    groupMaxMembers: "",
   });
   const [attachFiles, setAttachFiles] = useState<File[]>([]);
   const [linkInput, setLinkInput] = useState("");
@@ -278,6 +284,9 @@ export default function ClassroomDetailPage() {
     maxPoints: number;
     allowedFileTypes: string;
     maxFileSizeMb: number | "";
+    groupEnabled: boolean;
+    groupMinMembers: number | "";
+    groupMaxMembers: number | "";
   }>({
     title: "",
     instructions: "",
@@ -285,6 +294,9 @@ export default function ClassroomDetailPage() {
     maxPoints: 100,
     allowedFileTypes: "",
     maxFileSizeMb: "",
+    groupEnabled: false,
+    groupMinMembers: "",
+    groupMaxMembers: "",
   });
   const [editFiles, setEditFiles] = useState<File[]>([]);
   const [editLinks, setEditLinks] = useState<string[]>([]);
@@ -420,6 +432,9 @@ export default function ClassroomDetailPage() {
           MaxPoints: a.MaxPoints ?? a.maxPoints,
           AllowedFileTypes: a.AllowedFileTypes ?? a.allowedFileTypes ?? "",
           MaxFileSizeBytes: a.MaxFileSizeBytes ?? a.maxFileSizeBytes ?? null,
+          GroupEnabled: a.GroupEnabled ?? a.groupEnabled ?? false,
+          GroupMinMembers: a.GroupMinMembers ?? a.groupMinMembers ?? null,
+          GroupMaxMembers: a.GroupMaxMembers ?? a.groupMaxMembers ?? null,
           CreatedAt: a.CreatedAt ?? a.createdAt,
           ClassroomId: a.ClassroomId ?? a.classroomId
         };
@@ -441,7 +456,10 @@ export default function ClassroomDetailPage() {
             DueAt: (a.DueAt ?? a.dueAt ?? x.DueAt ?? x.dueAt) ?? null,
             MaxPoints: a.MaxPoints ?? a.maxPoints ?? x.MaxPoints ?? x.maxPoints,
             AllowedFileTypes: a.AllowedFileTypes ?? a.allowedFileTypes ?? x.AllowedFileTypes ?? x.allowedFileTypes ?? "",
-            MaxFileSizeBytes: a.MaxFileSizeBytes ?? a.maxFileSizeBytes ?? x.MaxFileSizeBytes ?? x.maxFileSizeBytes ?? null
+            MaxFileSizeBytes: a.MaxFileSizeBytes ?? a.maxFileSizeBytes ?? x.MaxFileSizeBytes ?? x.maxFileSizeBytes ?? null,
+            GroupEnabled: a.GroupEnabled ?? a.groupEnabled ?? x.GroupEnabled ?? x.groupEnabled ?? false,
+            GroupMinMembers: a.GroupMinMembers ?? a.groupMinMembers ?? x.GroupMinMembers ?? x.groupMinMembers ?? null,
+            GroupMaxMembers: a.GroupMaxMembers ?? a.groupMaxMembers ?? x.GroupMaxMembers ?? x.groupMaxMembers ?? null
           };
         });
         return { ...prev, Assignments: next, assignments: next };
@@ -493,11 +511,20 @@ export default function ClassroomDetailPage() {
         if (form.allowedFileTypes.trim()) fd.append("AllowedFileTypes", form.allowedFileTypes.trim());
         const maxSizeMb = Number(form.maxFileSizeMb);
         if (!Number.isNaN(maxSizeMb) && maxSizeMb > 0) fd.append("MaxFileSizeMb", String(maxSizeMb));
+        fd.append("GroupEnabled", String(!!form.groupEnabled));
+        if (form.groupEnabled) {
+          const minMembers = Number(form.groupMinMembers);
+          const maxMembers = Number(form.groupMaxMembers);
+          if (!Number.isNaN(minMembers) && minMembers > 0) fd.append("GroupMinMembers", String(minMembers));
+          if (!Number.isNaN(maxMembers) && maxMembers > 0) fd.append("GroupMaxMembers", String(maxMembers));
+        }
         attachFiles.forEach((f) => fd.append("Files", f));
         if (links.length) fd.append("Links", JSON.stringify(links));
         await api.post("/assignments/with-materials", fd);
       } else {
         const maxSizeMb = Number(form.maxFileSizeMb);
+        const minMembers = Number(form.groupMinMembers);
+        const maxMembers = Number(form.groupMaxMembers);
         await api.post("/assignments", {
           ClassroomId: String(classroomId),
           Title: form.title.trim(),
@@ -506,6 +533,9 @@ export default function ClassroomDetailPage() {
           MaxPoints: Number(form.maxPoints) || 100,
           AllowedFileTypes: form.allowedFileTypes.trim() || undefined,
           MaxFileSizeMb: !Number.isNaN(maxSizeMb) && maxSizeMb > 0 ? maxSizeMb : null,
+          GroupEnabled: !!form.groupEnabled,
+          GroupMinMembers: form.groupEnabled && !Number.isNaN(minMembers) && minMembers > 0 ? minMembers : null,
+          GroupMaxMembers: form.groupEnabled && !Number.isNaN(maxMembers) && maxMembers > 0 ? maxMembers : null,
         });
       }
 
@@ -513,7 +543,17 @@ export default function ClassroomDetailPage() {
       toast.success("Đã tạo bài tập");
       setFlash(`Đã giao bài: ${form.title.trim()}`);
       setTimeout(() => setFlash(""), 4000);
-      setForm({ title: "", instructions: "", dueAt: "", maxPoints: 100, allowedFileTypes: "", maxFileSizeMb: "" });
+      setForm({
+        title: "",
+        instructions: "",
+        dueAt: "",
+        maxPoints: 100,
+        allowedFileTypes: "",
+        maxFileSizeMb: "",
+        groupEnabled: false,
+        groupMinMembers: "",
+        groupMaxMembers: "",
+      });
       setAttachFiles([]);
       setLinks([]);
       setLinkInput("");
@@ -527,6 +567,9 @@ export default function ClassroomDetailPage() {
     const allowedFileTypes = a.allowedFileTypes ?? a.AllowedFileTypes ?? "";
     const maxBytes = a.maxFileSizeBytes ?? a.MaxFileSizeBytes;
     const maxFileSizeMb = maxBytes ? Math.round(Number(maxBytes) / (1024 * 1024)) : "";
+    const groupEnabled = !!(a.groupEnabled ?? a.GroupEnabled);
+    const groupMinMembers = a.groupMinMembers ?? a.GroupMinMembers ?? "";
+    const groupMaxMembers = a.groupMaxMembers ?? a.GroupMaxMembers ?? "";
     setEditing(a);
     setEditForm({
       title: a.title || "",
@@ -535,6 +578,9 @@ export default function ClassroomDetailPage() {
       maxPoints: a.maxPoints || 100,
       allowedFileTypes,
       maxFileSizeMb,
+      groupEnabled,
+      groupMinMembers,
+      groupMaxMembers,
     });
     const mats = a.attachments || a.materials || a.files || [];
     const detectedLinks = (mats || [])
@@ -551,6 +597,8 @@ export default function ClassroomDetailPage() {
     const id = editing.id;
     try {
       const maxSizeMb = Number(editForm.maxFileSizeMb);
+      const minMembers = Number(editForm.groupMinMembers);
+      const maxMembers = Number(editForm.groupMaxMembers);
       const payload = {
         title: editForm.title.trim(),
         instructions: editForm.instructions || undefined,
@@ -558,6 +606,9 @@ export default function ClassroomDetailPage() {
         maxPoints: Number(editForm.maxPoints) || 100,
         allowedFileTypes: editForm.allowedFileTypes.trim() || undefined,
         maxFileSizeMb: !Number.isNaN(maxSizeMb) && maxSizeMb > 0 ? maxSizeMb : null,
+        groupEnabled: !!editForm.groupEnabled,
+        groupMinMembers: editForm.groupEnabled && !Number.isNaN(minMembers) && minMembers > 0 ? minMembers : null,
+        groupMaxMembers: editForm.groupEnabled && !Number.isNaN(maxMembers) && maxMembers > 0 ? maxMembers : null,
       };
       await api.put(`/assignments/${id}`, payload);
 

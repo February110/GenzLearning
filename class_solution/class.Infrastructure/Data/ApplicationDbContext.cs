@@ -14,6 +14,8 @@ namespace class_api.Infrastructure.Data
         public DbSet<Classroom> Classrooms => Set<Classroom>();
         public DbSet<Enrollment> Enrollments => Set<Enrollment>();
         public DbSet<Assignment> Assignments => Set<Assignment>();
+        public DbSet<AssignmentGroup> AssignmentGroups => Set<AssignmentGroup>();
+        public DbSet<AssignmentGroupMember> AssignmentGroupMembers => Set<AssignmentGroupMember>();
         public DbSet<Submission> Submissions => Set<Submission>();
         public DbSet<Comment> Comments => Set<Comment>();
         public DbSet<Announcement> Announcements => Set<Announcement>();

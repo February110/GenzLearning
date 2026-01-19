@@ -71,6 +71,24 @@ namespace class_api.Controllers
             return name;
         }
 
+        private static bool IsGradedStatus(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status)) return false;
+            return string.Equals(status, "graded", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(status, "returned", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task<(AssignmentGroup group, AssignmentGroupMember member, List<AssignmentGroupMember> members)?> LoadGroupForUser(Guid assignmentId, Guid userId, CancellationToken ct)
+        {
+            var member = await _db.AssignmentGroupMembers
+                .Include(m => m.Group)
+                .ThenInclude(g => g.Members)
+                .FirstOrDefaultAsync(m => m.AssignmentId == assignmentId && m.UserId == userId, ct);
+            if (member == null || member.Group == null) return null;
+            var members = member.Group.Members.ToList();
+            return (member.Group, member, members);
+        }
+
         [HttpPost("{assignmentId}/upload")]
         public async Task<IActionResult> Upload(Guid assignmentId, IFormFile file, CancellationToken ct)
         {
@@ -90,6 +108,48 @@ namespace class_api.Controllers
             if (validationError != null)
                 return BadRequest(new { message = validationError });
 
+            AssignmentGroup? group = null;
+            List<Guid> groupMemberIds = new();
+            if (assignment.GroupEnabled)
+            {
+                var groupInfo = await LoadGroupForUser(assignmentId, userId, ct);
+                if (groupInfo == null)
+                    return BadRequest(new { message = "Bạn chưa có nhóm cho bài tập này." });
+
+                group = groupInfo.Value.group;
+                var member = groupInfo.Value.member;
+                var members = groupInfo.Value.members;
+                var canSubmit = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) || member.CanSubmit;
+                if (!canSubmit)
+                    return BadRequest(new { message = "Bạn không có quyền nộp bài cho nhóm." });
+
+                if (assignment.GroupMinMembers.HasValue && members.Count < assignment.GroupMinMembers.Value)
+                {
+                    return BadRequest(new { message = "Nhóm chưa đủ số lượng thành viên theo yêu cầu." });
+                }
+
+                groupMemberIds = members.Select(m => m.UserId).ToList();
+                var gradedExists = await _db.Grades.AnyAsync(g =>
+                    g.AssignmentId == assignmentId &&
+                    groupMemberIds.Contains(g.UserId) &&
+                    IsGradedStatus(g.Status), ct);
+                if (gradedExists)
+                {
+                    return BadRequest(new { message = "Bài đã được chấm nên không thể nộp lại." });
+                }
+            }
+            else
+            {
+                var gradedExists = await _db.Grades.AnyAsync(g =>
+                    g.AssignmentId == assignmentId &&
+                    g.UserId == userId &&
+                    IsGradedStatus(g.Status), ct);
+                if (gradedExists)
+                {
+                    return BadRequest(new { message = "Bài đã được chấm nên không thể nộp lại." });
+                }
+            }
+
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
             string Slug(string? s)
             {
@@ -101,7 +161,8 @@ namespace class_api.Controllers
             var classPart = Slug(assignment.Classroom?.Name) + "-" + assignment.ClassroomId.ToString().Substring(0, 8);
             var assignPart = Slug(assignment.Title) + "-" + assignment.Id.ToString().Substring(0, 8);
             var studentPart = Slug(user?.FullName ?? _currentUser.Email);
-            var prefix = $"submissions/{classPart}/{assignPart}/{studentPart}";
+            var groupPart = group != null ? $"group-{Slug(group.Name)}-{group.Id.ToString().Substring(0, 6)}" : studentPart;
+            var prefix = $"submissions/{classPart}/{assignPart}/{groupPart}";
 
             await using var stream = file.OpenReadStream();
             var (key, sizeBytes) = await _storage.UploadAsync(
@@ -117,6 +178,7 @@ namespace class_api.Controllers
                 Id = Guid.NewGuid(),
                 AssignmentId = assignmentId,
                 UserId = userId,
+                GroupId = group?.Id,
                 FileKey = key,
                 FileSize = sizeBytes,
                 ContentType = file.ContentType,
@@ -128,7 +190,7 @@ namespace class_api.Controllers
 
             await _activityStream.PublishAsync(new ActivityEvent("submission",
                 user?.FullName ?? _currentUser.Email,
-                $"nộp \"{assignment.Title}\"",
+                group != null ? $"nộp nhóm \"{group.Name}\"" : $"nộp \"{assignment.Title}\"",
                 assignment.Classroom?.Name,
                 DateTime.UtcNow));
 
@@ -140,7 +202,8 @@ namespace class_api.Controllers
                 fileKey = key,
                 downloadUrl,
                 fileSize = sizeBytes,
-                submittedAt = submission.SubmittedAt
+                submittedAt = submission.SubmittedAt,
+                groupId = submission.GroupId
             });
         }
 
@@ -166,6 +229,48 @@ namespace class_api.Controllers
                     return BadRequest(new { message = $"{f.FileName}: {validationError}" });
             }
 
+            AssignmentGroup? group = null;
+            List<Guid> groupMemberIds = new();
+            if (assignment.GroupEnabled)
+            {
+                var groupInfo = await LoadGroupForUser(assignmentId, userId, ct);
+                if (groupInfo == null)
+                    return BadRequest(new { message = "Bạn chưa có nhóm cho bài tập này." });
+
+                group = groupInfo.Value.group;
+                var member = groupInfo.Value.member;
+                var members = groupInfo.Value.members;
+                var canSubmit = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) || member.CanSubmit;
+                if (!canSubmit)
+                    return BadRequest(new { message = "Bạn không có quyền nộp bài cho nhóm." });
+
+                if (assignment.GroupMinMembers.HasValue && members.Count < assignment.GroupMinMembers.Value)
+                {
+                    return BadRequest(new { message = "Nhóm chưa đủ số lượng thành viên theo yêu cầu." });
+                }
+
+                groupMemberIds = members.Select(m => m.UserId).ToList();
+                var gradedExists = await _db.Grades.AnyAsync(g =>
+                    g.AssignmentId == assignmentId &&
+                    groupMemberIds.Contains(g.UserId) &&
+                    IsGradedStatus(g.Status), ct);
+                if (gradedExists)
+                {
+                    return BadRequest(new { message = "Bài đã được chấm nên không thể nộp lại." });
+                }
+            }
+            else
+            {
+                var gradedExists = await _db.Grades.AnyAsync(g =>
+                    g.AssignmentId == assignmentId &&
+                    g.UserId == userId &&
+                    IsGradedStatus(g.Status), ct);
+                if (gradedExists)
+                {
+                    return BadRequest(new { message = "Bài đã được chấm nên không thể nộp lại." });
+                }
+            }
+
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
             string Slug2(string? s)
             {
@@ -177,7 +282,8 @@ namespace class_api.Controllers
             var classPart2 = Slug2(assignment.Classroom?.Name) + "-" + assignment.ClassroomId.ToString().Substring(0, 8);
             var assignPart2 = Slug2(assignment.Title) + "-" + assignment.Id.ToString().Substring(0, 8);
             var studentPart2 = Slug2(user?.FullName ?? _currentUser.Email);
-            var prefix2 = $"submissions/{classPart2}/{assignPart2}/{studentPart2}";
+            var groupPart2 = group != null ? $"group-{Slug2(group.Name)}-{group.Id.ToString().Substring(0, 6)}" : studentPart2;
+            var prefix2 = $"submissions/{classPart2}/{assignPart2}/{groupPart2}";
 
             var results = new List<object>();
 
@@ -198,6 +304,7 @@ namespace class_api.Controllers
                     Id = Guid.NewGuid(),
                     AssignmentId = assignmentId,
                     UserId = userId,
+                    GroupId = group?.Id,
                     FileKey = key,
                     FileSize = sizeBytes,
                     ContentType = f.ContentType,
@@ -218,7 +325,7 @@ namespace class_api.Controllers
             await _db.SaveChangesAsync(ct);
             await _activityStream.PublishAsync(new ActivityEvent("submission",
                 user?.FullName ?? _currentUser.Email,
-                $"nộp \"{assignment!.Title}\"",
+                group != null ? $"nộp nhóm \"{group.Name}\"" : $"nộp \"{assignment!.Title}\"",
                 assignment.Classroom?.Name ?? assignment.ClassroomId.ToString(),
                 DateTime.UtcNow));
             return Ok(new { message = "Đã nộp nhiều tệp.", items = results });
@@ -229,6 +336,7 @@ namespace class_api.Controllers
         {
             var rows = await _db.Submissions
                 .Include(s => s.User)
+                .Include(s => s.Group)
                 .Where(s => s.AssignmentId == assignmentId)
                 .OrderByDescending(s => s.SubmittedAt)
                 .Select(s => new
@@ -237,6 +345,8 @@ namespace class_api.Controllers
                     s.UserId,
                     StudentName = s.User.FullName,
                     Email = s.User.Email,
+                    s.GroupId,
+                    GroupName = s.Group != null ? s.Group.Name : null,
                     s.FileKey,
                     s.ContentType,
                     s.FileSize,
@@ -266,6 +376,8 @@ namespace class_api.Controllers
                 item.UserId,
                 item.StudentName,
                 item.Email,
+                item.GroupId,
+                item.GroupName,
                 item.FileSize,
                 item.SubmittedAt,
                 fileKey = item.FileKey,
@@ -346,8 +458,15 @@ namespace class_api.Controllers
             if (uid == Guid.Empty)
                 return Unauthorized(new { message = "Vui lòng đăng nhập lại." });
 
+            var groupIds = await _db.AssignmentGroupMembers
+                .Where(m => m.UserId == uid)
+                .Select(m => m.GroupId)
+                .ToListAsync(ct);
+
             var rows = await _db.Submissions
-                .Where(s => s.UserId == uid)
+                .Include(s => s.Group)
+                .Include(s => s.User)
+                .Where(s => s.UserId == uid || (s.GroupId.HasValue && groupIds.Contains(s.GroupId.Value)))
                 .OrderByDescending(s => s.SubmittedAt)
                 .Select(s => new
                 {
@@ -356,6 +475,10 @@ namespace class_api.Controllers
                     s.FileKey,
                     s.FileSize,
                     s.SubmittedAt,
+                    s.GroupId,
+                    GroupName = s.Group != null ? s.Group.Name : null,
+                    SubmittedById = s.UserId,
+                    SubmittedByName = s.User.FullName,
                     Grade = _db.Grades
                         .Where(g => g.AssignmentId == s.AssignmentId && g.UserId == uid)
                         .Select(g => new
@@ -382,6 +505,10 @@ namespace class_api.Controllers
                 item.FileKey,
                 item.FileSize,
                 item.SubmittedAt,
+                item.GroupId,
+                item.GroupName,
+                item.SubmittedById,
+                item.SubmittedByName,
                 grade = item.Grade?.Score,
                 feedback = item.Grade?.Feedback,
                 gradeStatus = item.Grade?.Status,
@@ -432,16 +559,41 @@ namespace class_api.Controllers
             if (submission == null)
                 return NotFound(new { message = "Không tìm thấy bài nộp." });
 
-            if (submission.UserId != uid)
-                return Forbid();
-
-            var grade = await _db.Grades.AsNoTracking()
-                .FirstOrDefaultAsync(g => g.AssignmentId == submission.AssignmentId && g.UserId == uid, ct);
-            if (grade != null &&
-                (string.Equals(grade.Status, "graded", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(grade.Status, "returned", StringComparison.OrdinalIgnoreCase)))
+            if (submission.GroupId.HasValue)
             {
-                return BadRequest(new { message = "Bài đã được chấm nên không thể hủy." });
+                var member = await _db.AssignmentGroupMembers
+                    .FirstOrDefaultAsync(m => m.AssignmentId == submission.AssignmentId && m.UserId == uid, ct);
+                if (member == null || member.GroupId != submission.GroupId)
+                    return Forbid();
+                var canSubmit = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) || member.CanSubmit;
+                if (!canSubmit)
+                    return Forbid();
+            }
+            else
+            {
+                if (submission.UserId != uid)
+                    return Forbid();
+            }
+
+            if (submission.GroupId.HasValue)
+            {
+                var groupMemberIds = await _db.AssignmentGroupMembers
+                    .Where(m => m.GroupId == submission.GroupId.Value)
+                    .Select(m => m.UserId)
+                    .ToListAsync(ct);
+                var graded = await _db.Grades.AsNoTracking()
+                    .AnyAsync(g => g.AssignmentId == submission.AssignmentId && groupMemberIds.Contains(g.UserId) && IsGradedStatus(g.Status), ct);
+                if (graded)
+                    return BadRequest(new { message = "Bài đã được chấm nên không thể hủy." });
+            }
+            else
+            {
+                var grade = await _db.Grades.AsNoTracking()
+                    .FirstOrDefaultAsync(g => g.AssignmentId == submission.AssignmentId && g.UserId == uid, ct);
+                if (grade != null && IsGradedStatus(grade.Status))
+                {
+                    return BadRequest(new { message = "Bài đã được chấm nên không thể hủy." });
+                }
             }
 
             var dueAt = submission.Assignment?.DueAt;
@@ -451,7 +603,7 @@ namespace class_api.Controllers
             }
 
             var relatedGrades = await _db.Grades
-                .Where(g => g.AssignmentId == submission.AssignmentId && g.UserId == uid)
+                .Where(g => g.AssignmentId == submission.AssignmentId && (submission.GroupId.HasValue ? _db.AssignmentGroupMembers.Any(m => m.GroupId == submission.GroupId && m.UserId == g.UserId) : g.UserId == uid))
                 .ToListAsync(ct);
             if (relatedGrades.Count > 0)
                 _db.Grades.RemoveRange(relatedGrades);
@@ -472,31 +624,60 @@ namespace class_api.Controllers
             if (uid == Guid.Empty)
                 return Unauthorized(new { message = "Vui lòng đăng nhập lại." });
 
+            var assignment = await _db.Assignments.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == assignmentId, ct);
+            if (assignment == null)
+                return NotFound(new { message = "Không tìm thấy bài tập." });
+
+            AssignmentGroupMember? member = null;
+            Guid? groupId = null;
+            if (assignment.GroupEnabled)
+            {
+                member = await _db.AssignmentGroupMembers
+                    .FirstOrDefaultAsync(m => m.AssignmentId == assignmentId && m.UserId == uid, ct);
+                if (member == null)
+                    return BadRequest(new { message = "Bạn chưa có nhóm cho bài tập này." });
+                var canSubmit = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) || member.CanSubmit;
+                if (!canSubmit)
+                    return Forbid();
+                groupId = member.GroupId;
+            }
+
             var submissions = await _db.Submissions
-                .Where(s => s.AssignmentId == assignmentId && s.UserId == uid)
+                .Where(s => s.AssignmentId == assignmentId && (groupId.HasValue ? s.GroupId == groupId : s.UserId == uid))
                 .ToListAsync(ct);
 
             if (submissions.Count == 0)
                 return NotFound(new { message = "Không tìm thấy bài nộp của bạn cho bài tập này." });
 
-            var grade = await _db.Grades.AsNoTracking()
-                .FirstOrDefaultAsync(g => g.AssignmentId == assignmentId && g.UserId == uid, ct);
-            if (grade != null &&
-                (string.Equals(grade.Status, "graded", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(grade.Status, "returned", StringComparison.OrdinalIgnoreCase)))
+            if (groupId.HasValue)
             {
-                return BadRequest(new { message = "Bài đã được chấm nên không thể hủy." });
+                var groupMemberIds = await _db.AssignmentGroupMembers
+                    .Where(m => m.GroupId == groupId.Value)
+                    .Select(m => m.UserId)
+                    .ToListAsync(ct);
+                var graded = await _db.Grades.AsNoTracking()
+                    .AnyAsync(g => g.AssignmentId == assignmentId && groupMemberIds.Contains(g.UserId) && IsGradedStatus(g.Status), ct);
+                if (graded)
+                    return BadRequest(new { message = "Bài đã được chấm nên không thể hủy." });
+            }
+            else
+            {
+                var grade = await _db.Grades.AsNoTracking()
+                    .FirstOrDefaultAsync(g => g.AssignmentId == assignmentId && g.UserId == uid, ct);
+                if (grade != null && IsGradedStatus(grade.Status))
+                {
+                    return BadRequest(new { message = "Bài đã được chấm nên không thể hủy." });
+                }
             }
 
-            var assignment = await _db.Assignments.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == assignmentId, ct);
             if (assignment?.DueAt.HasValue == true && assignment.DueAt.Value <= DateTime.UtcNow)
             {
                 return BadRequest(new { message = "Đã quá hạn nộp bài nên không thể hủy." });
             }
 
             var relatedGrades = await _db.Grades
-                .Where(g => g.AssignmentId == assignmentId && g.UserId == uid)
+                .Where(g => g.AssignmentId == assignmentId && (groupId.HasValue ? _db.AssignmentGroupMembers.Any(m => m.GroupId == groupId && m.UserId == g.UserId) : g.UserId == uid))
                 .ToListAsync(ct);
             if (relatedGrades.Count > 0)
                 _db.Grades.RemoveRange(relatedGrades);

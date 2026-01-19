@@ -10,6 +10,9 @@ type FormState = {
   maxPoints: number;
   allowedFileTypes: string;
   maxFileSizeMb: number | "";
+  groupEnabled: boolean;
+  groupMinMembers: number | "";
+  groupMaxMembers: number | "";
 };
 
 interface AssignmentEditModalProps {
@@ -162,6 +165,49 @@ export default function AssignmentEditModal({
                 />
                 <div className="text-xs text-gray-400 mt-1">Để trống nếu không giới hạn.</div>
               </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950 p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                <input
+                  type="checkbox"
+                  checked={form.groupEnabled}
+                  onChange={(e) => setForm({ ...form, groupEnabled: e.target.checked })}
+                />
+                Nộp theo nhóm
+              </label>
+              {form.groupEnabled && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 dark:text-gray-400">Số thành viên tối thiểu</label>
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Ví dụ: 2"
+                        className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+                        value={form.groupMinMembers}
+                        onChange={(e) =>
+                          setForm({ ...form, groupMinMembers: e.target.value === "" ? "" : Number(e.target.value) })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 dark:text-gray-400">Số thành viên tối đa</label>
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Không bắt buộc"
+                        className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+                        value={form.groupMaxMembers}
+                        onChange={(e) =>
+                          setForm({ ...form, groupMaxMembers: e.target.value === "" ? "" : Number(e.target.value) })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-400">Mỗi học viên chỉ thuộc một nhóm cho bài tập này.</div>
+                </>
+              )}
             </div>
             <div className="pt-2 flex justify-end gap-2">
               <button

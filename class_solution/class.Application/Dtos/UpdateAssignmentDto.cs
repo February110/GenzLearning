@@ -6,7 +6,10 @@ namespace class_api.Application.Dtos
         System.DateTime? DueAt,
         int MaxPoints = 100,
         string? AllowedFileTypes = null,
-        int? MaxFileSizeMb = null
+        int? MaxFileSizeMb = null,
+        bool GroupEnabled = false,
+        int? GroupMinMembers = null,
+        int? GroupMaxMembers = null
     );
 }
 

@@ -160,6 +160,9 @@ namespace class_api.Controllers
                         a.MaxPoints,
                         a.AllowedFileTypes,
                         a.MaxFileSizeBytes,
+                        a.GroupEnabled,
+                        a.GroupMinMembers,
+                        a.GroupMaxMembers,
                         CreatedAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
                         Grades = a.Grades.Select(g => new
                         {

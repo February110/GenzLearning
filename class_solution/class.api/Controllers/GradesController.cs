@@ -39,6 +39,7 @@ namespace class_api.Controllers
                 .Include(s => s.Assignment)
                 .ThenInclude(a => a.Classroom)
                 .Include(s => s.User)
+                .Include(s => s.Group)
                 .FirstOrDefaultAsync(s => s.Id == submissionId, ct);
 
             if (sub == null) return NotFound("Submission not found");
@@ -49,39 +50,54 @@ namespace class_api.Controllers
 
             if (member == null || member.Role != "Teacher") return Forbid();
 
-            var grade = await _db.Grades
-                .FirstOrDefaultAsync(g => g.AssignmentId == sub.AssignmentId && g.UserId == sub.UserId, ct);
-
             var now = DateTime.UtcNow;
             var status = string.IsNullOrWhiteSpace(dto.Status) ? "graded" : dto.Status.Trim();
             var isReturned = string.Equals(status, "returned", StringComparison.OrdinalIgnoreCase);
 
-            if (grade == null)
+            var targetUserIds = new List<Guid> { sub.UserId };
+            if (sub.GroupId.HasValue)
             {
-                grade = new Grade
-                {
-                    AssignmentId = sub.AssignmentId,
-                    UserId = sub.UserId,
-                    SubmissionId = sub.Id,
-                    Score = dto.Grade,
-                    Feedback = dto.Feedback,
-                    Status = status,
-                    CreatedAt = now,
-                    UpdatedAt = now,
-                    ReturnedAt = isReturned ? now : null
-                };
-                _db.Grades.Add(grade);
+                targetUserIds = await _db.AssignmentGroupMembers
+                    .Where(m => m.GroupId == sub.GroupId.Value)
+                    .Select(m => m.UserId)
+                    .ToListAsync(ct);
             }
-            else
+
+            var existingGrades = await _db.Grades
+                .Where(g => g.AssignmentId == sub.AssignmentId && targetUserIds.Contains(g.UserId))
+                .ToListAsync(ct);
+
+            var gradeMap = existingGrades.ToDictionary(g => g.UserId, g => g);
+            foreach (var uid in targetUserIds)
             {
-                grade.Score = dto.Grade;
-                grade.Feedback = dto.Feedback;
-                grade.Status = status;
-                grade.SubmissionId = sub.Id;
-                grade.UpdatedAt = now;
-                if (isReturned)
+                if (!gradeMap.TryGetValue(uid, out var grade))
                 {
-                    grade.ReturnedAt = now;
+                    grade = new Grade
+                    {
+                        AssignmentId = sub.AssignmentId,
+                        UserId = uid,
+                        SubmissionId = sub.Id,
+                        Score = dto.Grade,
+                        Feedback = dto.Feedback,
+                        Status = status,
+                        CreatedAt = now,
+                        UpdatedAt = now,
+                        ReturnedAt = isReturned ? now : null
+                    };
+                    _db.Grades.Add(grade);
+                    gradeMap[uid] = grade;
+                }
+                else
+                {
+                    grade.Score = dto.Grade;
+                    grade.Feedback = dto.Feedback;
+                    grade.Status = status;
+                    grade.SubmissionId = sub.Id;
+                    grade.UpdatedAt = now;
+                    if (isReturned)
+                    {
+                        grade.ReturnedAt = now;
+                    }
                 }
             }
 
@@ -90,27 +106,31 @@ namespace class_api.Controllers
             var className = sub.Assignment?.Title ?? string.Empty;
             await _activityStream.PublishAsync(new ActivityEvent("grade",
                 member.User?.FullName ?? "Giáo viên",
-                $"chấm {studentName} {dto.Grade} điểm",
+                sub.GroupId.HasValue ? $"chấm nhóm \"{sub.Group?.Name ?? "nhóm"}\" {dto.Grade} điểm" : $"chấm {studentName} {dto.Grade} điểm",
                 className,
                 DateTime.UtcNow));
             try
             {
-                var realtimePayload = new
+                foreach (var uid in targetUserIds)
                 {
-                    assignmentId = sub.AssignmentId,
-                    submissionId = sub.Id,
-                    grade = grade.Score,
-                    feedback = grade.Feedback,
-                    gradeStatus = grade.Status,
-                    updatedAt = DateTime.SpecifyKind(grade.UpdatedAt, DateTimeKind.Utc),
-                    returnedFileKey = grade.ReturnedFileKey,
-                    returnedFileName = grade.ReturnedFileName,
-                    returnedFileSize = grade.ReturnedFileSize,
-                    returnedAt = grade.ReturnedAt.HasValue
-                        ? DateTime.SpecifyKind(grade.ReturnedAt.Value, DateTimeKind.Utc)
-                        : (DateTime?)null
-                };
-                await _hub.Clients.Group($"user:{sub.UserId}").SendAsync("GradeUpdated", realtimePayload, ct);
+                    if (!gradeMap.TryGetValue(uid, out var g)) continue;
+                    var realtimePayload = new
+                    {
+                        assignmentId = sub.AssignmentId,
+                        submissionId = sub.Id,
+                        grade = g.Score,
+                        feedback = g.Feedback,
+                        gradeStatus = g.Status,
+                        updatedAt = DateTime.SpecifyKind(g.UpdatedAt, DateTimeKind.Utc),
+                        returnedFileKey = g.ReturnedFileKey,
+                        returnedFileName = g.ReturnedFileName,
+                        returnedFileSize = g.ReturnedFileSize,
+                        returnedAt = g.ReturnedAt.HasValue
+                            ? DateTime.SpecifyKind(g.ReturnedAt.Value, DateTimeKind.Utc)
+                            : (DateTime?)null
+                    };
+                    await _hub.Clients.Group($"user:{uid}").SendAsync("GradeUpdated", realtimePayload, ct);
+                }
             }
             catch
             {
@@ -118,15 +138,11 @@ namespace class_api.Controllers
             return Ok(new
             {
                 message = "Graded successfully",
-                grade = grade.Score,
-                feedback = grade.Feedback,
-                gradeStatus = grade.Status,
-                returnedFileKey = grade.ReturnedFileKey,
-                returnedFileName = grade.ReturnedFileName,
-                returnedFileSize = grade.ReturnedFileSize,
-                returnedAt = grade.ReturnedAt.HasValue
-                    ? DateTime.SpecifyKind(grade.ReturnedAt.Value, DateTimeKind.Utc)
-                    : (DateTime?)null
+                grade = dto.Grade,
+                feedback = dto.Feedback,
+                gradeStatus = status,
+                groupApplied = sub.GroupId.HasValue,
+                recipients = targetUserIds.Count
             });
         }
 
@@ -146,6 +162,7 @@ namespace class_api.Controllers
                 .Include(s => s.Assignment)
                 .ThenInclude(a => a.Classroom)
                 .Include(s => s.User)
+                .Include(s => s.Group)
                 .FirstOrDefaultAsync(s => s.Id == submissionId, ct);
 
             if (sub == null) return NotFound(new { message = "Không tìm thấy bài nộp." });
@@ -156,10 +173,20 @@ namespace class_api.Controllers
 
             if (member == null || member.Role != "Teacher") return Forbid();
 
-            var existing = await _db.Grades
-                .FirstOrDefaultAsync(g => g.AssignmentId == sub.AssignmentId && g.UserId == sub.UserId, ct);
+            var targetUserIds = new List<Guid> { sub.UserId };
+            if (sub.GroupId.HasValue)
+            {
+                targetUserIds = await _db.AssignmentGroupMembers
+                    .Where(m => m.GroupId == sub.GroupId.Value)
+                    .Select(m => m.UserId)
+                    .ToListAsync(ct);
+            }
 
-            if (existing == null && grade == null)
+            var existingGrades = await _db.Grades
+                .Where(g => g.AssignmentId == sub.AssignmentId && targetUserIds.Contains(g.UserId))
+                .ToListAsync(ct);
+
+            if (existingGrades.Count == 0 && grade == null)
                 return BadRequest(new { message = "Vui lòng chấm điểm trước khi trả bài." });
 
             string Slug(string? s)
@@ -173,7 +200,8 @@ namespace class_api.Controllers
             var classPart = Slug(sub.Assignment.Classroom?.Name) + "-" + sub.Assignment.ClassroomId.ToString().Substring(0, 8);
             var assignPart = Slug(sub.Assignment.Title) + "-" + sub.AssignmentId.ToString().Substring(0, 8);
             var studentPart = Slug(sub.User?.FullName ?? sub.User?.Email ?? sub.UserId.ToString());
-            var prefix = $"returns/{classPart}/{assignPart}/{studentPart}";
+            var groupPart = sub.GroupId.HasValue ? $"group-{Slug(sub.Group?.Name)}-{sub.GroupId.Value.ToString().Substring(0, 6)}" : studentPart;
+            var prefix = $"returns/{classPart}/{assignPart}/{groupPart}";
 
             await using var stream = file.OpenReadStream();
             var (key, sizeBytes) = await _storage.UploadAsync(
@@ -185,60 +213,69 @@ namespace class_api.Controllers
             );
 
             var now = DateTime.UtcNow;
-            if (existing == null)
+            var gradeMap = existingGrades.ToDictionary(g => g.UserId, g => g);
+            foreach (var uid in targetUserIds)
             {
-                existing = new Grade
+                if (!gradeMap.TryGetValue(uid, out var existing))
                 {
-                    AssignmentId = sub.AssignmentId,
-                    UserId = sub.UserId,
-                    SubmissionId = sub.Id,
-                    Score = grade ?? 0,
-                    Feedback = feedback,
-                    Status = "returned",
-                    CreatedAt = now,
-                    UpdatedAt = now,
-                    ReturnedFileKey = key,
-                    ReturnedFileName = file.FileName,
-                    ReturnedContentType = file.ContentType,
-                    ReturnedFileSize = sizeBytes,
-                    ReturnedAt = now
-                };
-                _db.Grades.Add(existing);
-            }
-            else
-            {
-                if (grade.HasValue) existing.Score = grade.Value;
-                if (feedback != null) existing.Feedback = feedback;
-                existing.Status = "returned";
-                existing.SubmissionId = sub.Id;
-                existing.UpdatedAt = now;
-                existing.ReturnedFileKey = key;
-                existing.ReturnedFileName = file.FileName;
-                existing.ReturnedContentType = file.ContentType;
-                existing.ReturnedFileSize = sizeBytes;
-                existing.ReturnedAt = now;
+                    existing = new Grade
+                    {
+                        AssignmentId = sub.AssignmentId,
+                        UserId = uid,
+                        SubmissionId = sub.Id,
+                        Score = grade ?? 0,
+                        Feedback = feedback,
+                        Status = "returned",
+                        CreatedAt = now,
+                        UpdatedAt = now,
+                        ReturnedFileKey = key,
+                        ReturnedFileName = file.FileName,
+                        ReturnedContentType = file.ContentType,
+                        ReturnedFileSize = sizeBytes,
+                        ReturnedAt = now
+                    };
+                    _db.Grades.Add(existing);
+                    gradeMap[uid] = existing;
+                }
+                else
+                {
+                    if (grade.HasValue) existing.Score = grade.Value;
+                    if (feedback != null) existing.Feedback = feedback;
+                    existing.Status = "returned";
+                    existing.SubmissionId = sub.Id;
+                    existing.UpdatedAt = now;
+                    existing.ReturnedFileKey = key;
+                    existing.ReturnedFileName = file.FileName;
+                    existing.ReturnedContentType = file.ContentType;
+                    existing.ReturnedFileSize = sizeBytes;
+                    existing.ReturnedAt = now;
+                }
             }
 
             await _db.SaveChangesAsync(ct);
 
             try
             {
-                var realtimePayload = new
+                foreach (var uid in targetUserIds)
                 {
-                    assignmentId = sub.AssignmentId,
-                    submissionId = sub.Id,
-                    grade = existing.Score,
-                    feedback = existing.Feedback,
-                    gradeStatus = existing.Status,
-                    updatedAt = DateTime.SpecifyKind(existing.UpdatedAt, DateTimeKind.Utc),
-                    returnedFileKey = existing.ReturnedFileKey,
-                    returnedFileName = existing.ReturnedFileName,
-                    returnedFileSize = existing.ReturnedFileSize,
-                    returnedAt = existing.ReturnedAt.HasValue
-                        ? DateTime.SpecifyKind(existing.ReturnedAt.Value, DateTimeKind.Utc)
-                        : (DateTime?)null
-                };
-                await _hub.Clients.Group($"user:{sub.UserId}").SendAsync("GradeUpdated", realtimePayload, ct);
+                    if (!gradeMap.TryGetValue(uid, out var g)) continue;
+                    var realtimePayload = new
+                    {
+                        assignmentId = sub.AssignmentId,
+                        submissionId = sub.Id,
+                        grade = g.Score,
+                        feedback = g.Feedback,
+                        gradeStatus = g.Status,
+                        updatedAt = DateTime.SpecifyKind(g.UpdatedAt, DateTimeKind.Utc),
+                        returnedFileKey = g.ReturnedFileKey,
+                        returnedFileName = g.ReturnedFileName,
+                        returnedFileSize = g.ReturnedFileSize,
+                        returnedAt = g.ReturnedAt.HasValue
+                            ? DateTime.SpecifyKind(g.ReturnedAt.Value, DateTimeKind.Utc)
+                            : (DateTime?)null
+                    };
+                    await _hub.Clients.Group($"user:{uid}").SendAsync("GradeUpdated", realtimePayload, ct);
+                }
             }
             catch
             {
@@ -247,15 +284,14 @@ namespace class_api.Controllers
             return Ok(new
             {
                 message = "Đã trả bài",
-                grade = existing.Score,
-                feedback = existing.Feedback,
-                gradeStatus = existing.Status,
-                returnedFileKey = existing.ReturnedFileKey,
-                returnedFileName = existing.ReturnedFileName,
-                returnedFileSize = existing.ReturnedFileSize,
-                returnedAt = existing.ReturnedAt.HasValue
-                    ? DateTime.SpecifyKind(existing.ReturnedAt.Value, DateTimeKind.Utc)
-                    : (DateTime?)null
+                grade = grade,
+                feedback = feedback,
+                gradeStatus = "returned",
+                returnedFileKey = key,
+                returnedFileName = file.FileName,
+                returnedFileSize = sizeBytes,
+                groupApplied = sub.GroupId.HasValue,
+                recipients = targetUserIds.Count
             });
         }
     }

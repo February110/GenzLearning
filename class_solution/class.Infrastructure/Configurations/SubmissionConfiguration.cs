@@ -21,6 +21,11 @@ namespace class_api.Infrastructure.Configurations
                 .WithMany(u => u.Submissions)
                 .HasForeignKey(s => s.UserId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            builder.HasOne(s => s.Group)
+                .WithMany(g => g.Submissions)
+                .HasForeignKey(s => s.GroupId)
+                .OnDelete(DeleteBehavior.NoAction);
         }
     }
 }

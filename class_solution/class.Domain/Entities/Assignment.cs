@@ -19,6 +19,10 @@ namespace class_api.Domain
         public string? AllowedFileTypes { get; set; }
         public long? MaxFileSizeBytes { get; set; }
 
+        public bool GroupEnabled { get; set; } = false;
+        public int? GroupMinMembers { get; set; }
+        public int? GroupMaxMembers { get; set; }
+
         public Guid CreatedBy { get; set; }
         public User? Creator { get; set; }
 
@@ -27,5 +31,6 @@ namespace class_api.Domain
 
         public ICollection<Submission> Submissions { get; set; } = new List<Submission>();
         public ICollection<Grade> Grades { get; set; } = new List<Grade>();
+        public ICollection<AssignmentGroup> Groups { get; set; } = new List<AssignmentGroup>();
     }
 }

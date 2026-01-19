@@ -43,9 +43,19 @@ export default function AssignmentDetailPage() {
   const [comments, setComments] = useState<any[]>([]);
   const [commentInput, setCommentInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [myGroup, setMyGroup] = useState<any>(null);
+  const [groupName, setGroupName] = useState("");
+  const [newMemberIds, setNewMemberIds] = useState<string[]>([]);
+  const [addMemberIds, setAddMemberIds] = useState<string[]>([]);
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const dueTs = useMemo(() => {
     const d = (assignment as any)?.dueAt || (assignment as any)?.DueAt;
     return d ? new Date(d).getTime() : null;
+  }, [assignment]);
+  const groupEnabled = useMemo(() => {
+    return !!(assignment?.groupEnabled ?? assignment?.GroupEnabled);
   }, [assignment]);
   const allowedTokens = useMemo<string[]>(() => {
     const raw = String(assignment?.allowedFileTypes || assignment?.AllowedFileTypes || "");
@@ -220,6 +230,39 @@ export default function AssignmentDetailPage() {
   }
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {};
+  const myGroupData = useMemo(() => (myGroup?.group ?? myGroup?.Group) || null, [myGroup]);
+  const myMemberInfo = useMemo(() => (myGroup?.member ?? myGroup?.Member) || null, [myGroup]);
+  const myGroupMembers = useMemo(() => {
+    const raw = myGroupData?.members ?? myGroupData?.Members ?? [];
+    return Array.isArray(raw) ? raw : [];
+  }, [myGroupData]);
+  const myIsLeader = !!(myMemberInfo && String(myMemberInfo.role || myMemberInfo.Role || "") === "Leader");
+  const myCanSubmit = myIsLeader || !!(myMemberInfo?.canSubmit ?? myMemberInfo?.CanSubmit);
+  const groupMinMembers = assignment?.groupMinMembers ?? assignment?.GroupMinMembers ?? null;
+  const groupMaxMembers = assignment?.groupMaxMembers ?? assignment?.GroupMaxMembers ?? null;
+  const groupMemberCount = myGroupMembers.length;
+  const groupMeetsMin = !groupMinMembers || groupMemberCount >= groupMinMembers;
+  const canSubmitNow = !groupEnabled || (!!myGroupData && myCanSubmit && groupMeetsMin);
+  const assignedMemberIds = useMemo(() => {
+    const set = new Set<string>();
+    (groups || []).forEach((g: any) => {
+      const members = g.members ?? g.Members ?? [];
+      members.forEach((m: any) => {
+        const id = (m.userId ?? m.UserId ?? "").toString();
+        if (id) set.add(id);
+      });
+    });
+    return set;
+  }, [groups]);
+  const availableStudents = useMemo(() => {
+    const meId = String(user?.id ?? user?.userId ?? user?.Id ?? "");
+    return (students || []).filter((s: any) => {
+      const uid = (s.userId || "").toString();
+      if (!uid) return false;
+      if (assignedMemberIds.has(uid)) return false;
+      return uid !== meId;
+    });
+  }, [students, assignedMemberIds, user]);
 
   useEffect(() => { if (id) load(); }, [id]);
   useEffect(() => {
@@ -289,6 +332,7 @@ export default function AssignmentDetailPage() {
     try {
       const { data } = await api.get(`/assignments/${id}`);
       setAssignment(data);
+      const enableGroups = !!(data?.groupEnabled ?? data?.GroupEnabled);
       try {
         const mats = await api.get(`/assignments/${id}/materials`);
         setAssignment((prev:any)=> ({ ...(prev||{}), materials: mats.data }));
@@ -297,6 +341,8 @@ export default function AssignmentDetailPage() {
         detectRole(data?.classroomId || data?.ClassroomId),
         loadSubs(),
         loadMySubs(),
+        enableGroups ? loadGroups(true) : Promise.resolve(),
+        enableGroups ? loadMyGroup(true) : Promise.resolve(),
       ]);
     } catch (e:any) {
       const msg = e?.response?.data?.message || e?.message || 'Không tải được bài tập';
@@ -319,8 +365,107 @@ export default function AssignmentDetailPage() {
     } catch {}
   }
 
+  async function loadGroups(forceEnabled?: boolean) {
+    const enabled = typeof forceEnabled === "boolean" ? forceEnabled : groupEnabled;
+    if (!enabled) {
+      setGroups([]);
+      return;
+    }
+    try {
+      const { data } = await api.get(`/assignments/${id}/groups`);
+      setGroups(Array.isArray(data) ? data : []);
+    } catch {
+      setGroups([]);
+    }
+  }
+
+  async function loadMyGroup(forceEnabled?: boolean) {
+    const enabled = typeof forceEnabled === "boolean" ? forceEnabled : groupEnabled;
+    if (!enabled) {
+      setMyGroup(null);
+      return;
+    }
+    try {
+      const { data } = await api.get(`/assignments/${id}/groups/me`);
+      setMyGroup(data || null);
+    } catch (err: any) {
+      if (err?.response?.status === 404) setMyGroup(null);
+    }
+  }
+
+  async function createGroup() {
+    if (!groupName.trim()) {
+      toast.error("Vui lòng nhập tên nhóm");
+      return;
+    }
+    try {
+      setGroupBusy(true);
+      await api.post(`/assignments/${id}/groups`, {
+        name: groupName.trim(),
+        memberIds: newMemberIds.map((x) => x.trim()).filter(Boolean),
+      });
+      toast.success("Đã tạo nhóm");
+      setGroupName("");
+      setNewMemberIds([]);
+      await Promise.all([loadGroups(true), loadMyGroup(true)]);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Tạo nhóm thất bại");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
+  async function addMembers(groupId: string) {
+    if (!addMemberIds.length) {
+      toast.error("Chưa chọn thành viên");
+      return;
+    }
+    try {
+      setGroupBusy(true);
+      await api.post(`/assignments/${id}/groups/${groupId}/members`, {
+        memberIds: addMemberIds.map((x) => x.trim()).filter(Boolean),
+      });
+      toast.success("Đã thêm thành viên");
+      setAddMemberIds([]);
+      await Promise.all([loadGroups(true), loadMyGroup(true)]);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Thêm thành viên thất bại");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
+  async function removeMember(groupId: string, userId: string) {
+    try {
+      setGroupBusy(true);
+      await api.delete(`/assignments/${id}/groups/${groupId}/members/${userId}`);
+      toast.success("Đã xóa thành viên");
+      await Promise.all([loadGroups(true), loadMyGroup(true)]);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Xóa thành viên thất bại");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
+  async function toggleMemberSubmit(groupId: string, userId: string, canSubmit: boolean) {
+    try {
+      setGroupBusy(true);
+      await api.patch(`/assignments/${id}/groups/${groupId}/members/${userId}`, { canSubmit });
+      await Promise.all([loadGroups(true), loadMyGroup(true)]);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Cập nhật quyền nộp thất bại");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
   async function handleDeleteSubmission(subId?: string){
     try{
+      if (groupEnabled && !myCanSubmit) {
+        toast.error("Bạn không có quyền hủy bài nộp của nhóm.");
+        return;
+      }
       if(subId){
         await api.delete(`/submissions/${subId}`);
       } else {
@@ -357,6 +502,20 @@ export default function AssignmentDetailPage() {
 
   async function submitFile(e: React.FormEvent){
     e.preventDefault();
+    if (groupEnabled) {
+      if (!myGroupData) {
+        toast.error("Bạn chưa có nhóm cho bài tập này.");
+        return;
+      }
+      if (!myCanSubmit) {
+        toast.error("Bạn không có quyền nộp bài cho nhóm.");
+        return;
+      }
+      if (!groupMeetsMin) {
+        toast.error("Nhóm chưa đủ số lượng thành viên theo yêu cầu.");
+        return;
+      }
+    }
     if(!files || files.length === 0){ toast.error('Chọn tệp trước'); return; }
     await uploadSelected(files);
   }
@@ -425,7 +584,7 @@ export default function AssignmentDetailPage() {
     const safeTitle = String(titleRaw).replace(/[\\/:*?"<>|]/g, "_").trim() || `assignment-${id}`;
     const rowsHtml = students
       .map((s: any) => {
-        const g = byEmail.get((s.userId || "").toString());
+        const g = byUserId.get((s.userId || "").toString());
         const submitted = !!g;
         const isLate = !!(submitted && dueTs && g?.latestAt > dueTs);
         const score = submitted ? (g.grade ?? "") : 0;
@@ -477,6 +636,7 @@ export default function AssignmentDetailPage() {
 
   // Group submissions by student so multiple files show as one row (Google Classroom style)
   const grouped = useMemo(() => {
+    if (groupEnabled) return [];
     const map = new Map<string, any>();
     subs.forEach((s: any) => {
       const userId = (s.userId || s.UserId || "").toString();
@@ -525,21 +685,128 @@ export default function AssignmentDetailPage() {
         g.files.push({ id, size, at, fileKey, contentType, grade: gradeScore, gradeStatus, feedback });
       }
     });
-    // sort files per group by time desc
     const arr = Array.from(map.values());
     arr.forEach((g: any) => g.files.sort((a: any, b: any) => b.at - a.at));
-    // sort groups by latest time desc
     return arr.sort((a: any, b: any) => b.latestAt - a.latestAt);
-  }, [subs]);
+  }, [subs, groupEnabled]);
 
-  // Map by email for quick lookup
+  const groupSubmissions = useMemo(() => {
+    const map = new Map<string, any>();
+    if (!groupEnabled) return map;
+    subs.forEach((s: any) => {
+      const groupId = (s.groupId || s.GroupId || "").toString();
+      if (!groupId) return;
+      const groupName = s.groupName || s.GroupName || "";
+      const size = s.fileSize ?? s.FileSize ?? 0;
+      const fileKey = s.fileKey ?? s.FileKey ?? "";
+      const contentType = s.contentType ?? s.ContentType ?? "";
+      const at = new Date(s.submittedAt || s.SubmittedAt).getTime();
+      const id = s.id || s.Id;
+      const submitterId = (s.userId || s.UserId || "").toString();
+      const submitterName = s.studentName || s.StudentName || s.submittedByName || s.SubmittedByName || "";
+      const gradeDetail = (s.gradeDetail || s.GradeDetail || null) as any;
+      const gradeStatus = (s.gradeStatus ?? s.GradeStatus ?? gradeDetail?.status ?? gradeDetail?.Status) || null;
+      const gradeScore = (s.grade ?? s.Grade ?? gradeDetail?.score ?? gradeDetail?.Score) ?? null;
+      const feedback = s.feedback ?? s.Feedback ?? gradeDetail?.feedback ?? gradeDetail?.Feedback ?? null;
+      const returnedFileKey = gradeDetail?.returnedFileKey ?? gradeDetail?.ReturnedFileKey ?? null;
+      const returnedFileName = gradeDetail?.returnedFileName ?? gradeDetail?.ReturnedFileName ?? null;
+      if (!map.has(groupId)) {
+        map.set(groupId, {
+          groupId,
+          groupName,
+          totalSize: size,
+          latestAt: at,
+          grade: gradeScore,
+          gradeStatus,
+          feedback,
+          returnedFileKey,
+          returnedFileName,
+          submittedById: submitterId,
+          submittedByName: submitterName,
+          files: [{ id, size, at, fileKey, contentType, grade: gradeScore, gradeStatus, feedback }],
+        });
+      } else {
+        const g = map.get(groupId);
+        g.totalSize += size;
+        if (at > g.latestAt) {
+          g.latestAt = at;
+          g.grade = gradeScore ?? g.grade;
+          g.gradeStatus = gradeStatus ?? g.gradeStatus;
+          g.feedback = feedback ?? g.feedback;
+          g.submittedById = submitterId || g.submittedById;
+          g.submittedByName = submitterName || g.submittedByName;
+        } else if (gradeScore != null && g.grade == null) {
+          g.grade = gradeScore;
+        }
+        if (gradeStatus && !g.gradeStatus) g.gradeStatus = gradeStatus;
+        if (returnedFileKey && !g.returnedFileKey) g.returnedFileKey = returnedFileKey;
+        if (returnedFileName && !g.returnedFileName) g.returnedFileName = returnedFileName;
+        g.files.push({ id, size, at, fileKey, contentType, grade: gradeScore, gradeStatus, feedback });
+      }
+    });
+    map.forEach((g: any) => g.files.sort((a: any, b: any) => b.at - a.at));
+    return map;
+  }, [subs, groupEnabled]);
+
+  const normalizedGroups = useMemo(() => {
+    if (!groupEnabled) return [];
+    return (groups || []).map((g: any) => {
+      const id = (g.id ?? g.Id ?? "").toString();
+      const membersRaw = g.members ?? g.Members ?? [];
+      const members = (membersRaw || []).map((m: any) => ({
+        userId: (m.userId ?? m.UserId ?? "").toString(),
+        name: m.fullName ?? m.FullName ?? "",
+        email: m.email ?? m.Email ?? "",
+        avatar: m.avatar ?? m.Avatar ?? "",
+        role: m.role ?? m.Role ?? "Member",
+        canSubmit: m.canSubmit ?? m.CanSubmit ?? false,
+      }));
+      const leaderId = (g.leaderId ?? g.LeaderId ?? "").toString();
+      const leaderName = g.leaderName ?? g.LeaderName ?? members.find((m: any) => m.userId === leaderId)?.name;
+      const submission = id ? groupSubmissions.get(id) : null;
+      return {
+        id,
+        name: g.name ?? g.Name ?? "Nhóm",
+        leaderId,
+        leaderName,
+        members,
+        submission,
+      };
+    });
+  }, [groups, groupSubmissions, groupEnabled]);
+
+  // Map by user id for quick lookup
   const byEmail = useMemo(() => {
     const m = new Map<string, any>();
     grouped.forEach((g) => { if (g.userId) m.set(g.userId, g); });
     return m;
   }, [grouped]);
 
+  const byUserId = useMemo(() => {
+    if (!groupEnabled) return byEmail;
+    const m = new Map<string, any>();
+    normalizedGroups.forEach((g: any) => {
+      g.members.forEach((mbr: any) => {
+        m.set(mbr.userId, g.submission || null);
+      });
+    });
+    return m;
+  }, [groupEnabled, normalizedGroups, byEmail]);
+
   const stats = useMemo(() => {
+    if (groupEnabled) {
+      const total = normalizedGroups.length;
+      let submitted = 0, graded = 0, late = 0;
+      normalizedGroups.forEach(g => {
+        const sub = g.submission;
+        if (sub) {
+          submitted++;
+          if (sub.grade != null) graded++;
+          if (dueTs && sub.latestAt > dueTs) late++;
+        }
+      });
+      return { total, submitted, notSubmitted: total - submitted, graded, late };
+    }
     const total = students.length;
     let submitted = 0, graded = 0, late = 0;
     students.forEach(s => {
@@ -551,9 +818,24 @@ export default function AssignmentDetailPage() {
       }
     });
     return { total, submitted, notSubmitted: total - submitted, graded, late };
-  }, [students, byEmail, dueTs]);
+  }, [students, byEmail, dueTs, groupEnabled, normalizedGroups]);
 
   const roster = useMemo(()=>{
+    if (groupEnabled) {
+      return normalizedGroups
+        .map((g:any)=> ({ ...g, group: g.submission, submitted: !!g.submission, latestAt: g.submission?.latestAt || 0 }))
+        .filter(item => filter==='all' ? true : filter==='submitted' ? item.submitted : !item.submitted)
+        .filter(item => {
+          const key = rosterQuery.trim().toLowerCase();
+          if (!key) return true;
+          const nameMatch = (item.name || "").toLowerCase().includes(key);
+          const memberMatch = item.members?.some((m: any) =>
+            (m.name || "").toLowerCase().includes(key) || (m.email || "").toLowerCase().includes(key)
+          );
+          return nameMatch || memberMatch;
+        })
+        .sort((a,b)=> b.latestAt - a.latestAt || (a.name || "").localeCompare(b.name || ""));
+    }
     return students
       .map((s:any)=>{
         const g = byEmail.get((s.userId||'').toString());
@@ -566,44 +848,57 @@ export default function AssignmentDetailPage() {
         return item.name.toLowerCase().includes(key) || item.email.toLowerCase().includes(key);
       })
       .sort((a,b)=> b.latestAt - a.latestAt || a.name.localeCompare(b.name));
-  }, [students, byEmail, filter, rosterQuery]);
+  }, [students, byEmail, filter, rosterQuery, groupEnabled, normalizedGroups]);
 
   const selectedGroup = useMemo(()=> byEmail.get(selectedEmail), [byEmail, selectedEmail]);
+  const selectedGroupEntry = useMemo(() => {
+    if (!groupEnabled) return null;
+    return normalizedGroups.find((g: any) => g.id === String(selectedGroupId)) || null;
+  }, [groupEnabled, normalizedGroups, selectedGroupId]);
   const selectedStudent = useMemo(() => {
     return students.find((s) => (s.userId || "").toString() === selectedEmail) || null;
   }, [students, selectedEmail]);
   const selectedAvatar = selectedStudent ? getAvatar(selectedStudent) : undefined;
-  const detailIsLate = !!(dueTs && selectedGroup?.latestAt && selectedGroup.latestAt > dueTs);
-  const detailSubmitLabel = selectedGroup ? (detailIsLate ? "Nộp muộn" : "Đã nộp") : "Chưa nộp";
-  const detailSubmitClass = selectedGroup
+  const selectedSubmission = groupEnabled ? selectedGroupEntry?.submission : selectedGroup;
+  const selectedCommentUserId = groupEnabled
+    ? (selectedGroupEntry?.leaderId || selectedGroupEntry?.members?.[0]?.userId || undefined)
+    : (selectedEmail || undefined);
+  const detailIsLate = !!(dueTs && selectedSubmission?.latestAt && selectedSubmission.latestAt > dueTs);
+  const detailSubmitLabel = selectedSubmission ? (detailIsLate ? "Nộp muộn" : "Đã nộp") : "Chưa nộp";
+  const detailSubmitClass = selectedSubmission
     ? detailIsLate
       ? "bg-rose-50 text-rose-600 border-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300"
       : "bg-emerald-50 text-emerald-700 border-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300"
     : "bg-gray-100 text-gray-700 border-gray-200 dark:border-gray-800 dark:bg-zinc-800 dark:text-gray-200";
-  const detailGradeLabel = selectedGroup
-    ? selectedGroup.gradeStatus === "returned"
-      ? `Điểm: ${selectedGroup.grade ?? "-"}`
-      : selectedGroup.grade != null
-      ? `Điểm: ${selectedGroup.grade}`
-      : selectedGroup.gradeStatus === "pending"
+  const detailGradeLabel = selectedSubmission
+    ? selectedSubmission.gradeStatus === "returned"
+      ? `Điểm: ${selectedSubmission.grade ?? "-"}`
+      : selectedSubmission.grade != null
+      ? `Điểm: ${selectedSubmission.grade}`
+      : selectedSubmission.gradeStatus === "pending"
       ? "Đang chấm"
       : "Chưa chấm"
     : "Chưa chấm";
   const detailGradeClass =
-    selectedGroup?.gradeStatus === "returned"
+    selectedSubmission?.gradeStatus === "returned"
       ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300"
-      : selectedGroup?.grade != null
+      : selectedSubmission?.grade != null
       ? "bg-indigo-50 text-indigo-700 border-indigo-100 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-300"
-      : selectedGroup?.gradeStatus === "pending"
+      : selectedSubmission?.gradeStatus === "pending"
       ? "bg-amber-50 text-amber-700 border-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300"
       : "bg-gray-100 text-gray-700 border-gray-200 dark:border-gray-800 dark:bg-zinc-800 dark:text-gray-200";
 
   useEffect(()=>{
     // Auto select first in roster for teacher view
-    if(isTeacher && roster.length && !selectedEmail){
+    if(!isTeacher || !roster.length) return;
+    if (groupEnabled) {
+      if (!selectedGroupId) setSelectedGroupId((roster[0].id || "").toString());
+      return;
+    }
+    if(!selectedEmail){
       setSelectedEmail((roster[0].userId||'').toString());
     }
-  }, [isTeacher, roster, selectedEmail]);
+  }, [isTeacher, roster, selectedEmail, selectedGroupId, groupEnabled]);
 
   if (loading) return <div className="p-6"><div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-6">Đang tải...</div></div>;
   if (!assignment) return <div className="p-6"><div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-6">Không tìm thấy bài tập</div></div>;
@@ -667,15 +962,179 @@ export default function AssignmentDetailPage() {
       {!isTeacher && (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-6">
           <div className="text-lg font-semibold mb-3">Bài tập của bạn</div>
+          {groupEnabled && (
+            <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950/40 p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-semibold">Nhóm của bạn</div>
+                {(groupMinMembers || groupMaxMembers) && (
+                  <div className="text-xs text-gray-500">
+                    Yêu cầu: tối thiểu {groupMinMembers || 1}
+                    {groupMaxMembers ? ` • tối đa ${groupMaxMembers}` : ""}
+                  </div>
+                )}
+              </div>
+              {!myGroupData ? (
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-600">Bạn chưa có nhóm cho bài tập này.</div>
+                  <div className="grid gap-3">
+                    <input
+                      value={groupName}
+                      onChange={(e) => setGroupName(e.target.value)}
+                      placeholder="Tên nhóm"
+                      className="w-full rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 py-2 text-sm"
+                    />
+                    <div>
+                      <div className="text-xs text-gray-500 mb-2">Chọn thành viên (không bắt buộc)</div>
+                      <div className="grid sm:grid-cols-2 gap-2 max-h-40 overflow-auto pr-1">
+                        {availableStudents.length === 0 && (
+                          <div className="text-xs text-gray-500">Không còn học viên để thêm.</div>
+                        )}
+                        {availableStudents.map((s: any) => {
+                          const uid = (s.userId || "").toString();
+                          const checked = newMemberIds.includes(uid);
+                          return (
+                            <label key={uid} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  setNewMemberIds((prev) =>
+                                    e.target.checked ? [...prev, uid] : prev.filter((x) => x !== uid)
+                                  );
+                                }}
+                              />
+                              <span className="truncate">{s.name || s.email}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={groupBusy || !groupName.trim()}
+                      onClick={createGroup}
+                      className="self-start rounded-full bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      Tạo nhóm
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white">{myGroupData.name || myGroupData.Name || "Nhóm"}</div>
+                      <div className="text-xs text-gray-500">Thành viên: {groupMemberCount}</div>
+                    </div>
+                    <span className={`text-xs rounded-full px-2 py-1 ${myCanSubmit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
+                      {myCanSubmit ? "Có quyền nộp" : "Chưa có quyền nộp"}
+                    </span>
+                  </div>
+                  {!groupMeetsMin && (
+                    <div className="text-xs text-rose-600">Nhóm chưa đủ số lượng thành viên theo yêu cầu.</div>
+                  )}
+                  <div className="space-y-2">
+                    {myGroupMembers.map((m: any) => {
+                      const role = (m.role || m.Role || "").toLowerCase();
+                      const isLeader = role === "leader";
+                      const canSubmit = isLeader || !!(m.canSubmit ?? m.CanSubmit);
+                      return (
+                        <div key={m.userId || m.UserId} className="flex items-center justify-between rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2 text-xs">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-gray-800 dark:text-gray-100 truncate">
+                              {m.fullName || m.FullName || m.name || m.email || "Thành viên"}
+                            </div>
+                            <div className="text-gray-500 truncate">
+                              {isLeader ? "Trưởng nhóm" : "Thành viên"}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {myIsLeader && !isLeader && (
+                              <label className="flex items-center gap-1 text-[11px] text-gray-600">
+                                <input
+                                  type="checkbox"
+                                  checked={canSubmit}
+                                  onChange={(e) =>
+                                    toggleMemberSubmit(
+                                      myGroupData.id || myGroupData.Id,
+                                      (m.userId || m.UserId || "").toString(),
+                                      e.target.checked
+                                    )
+                                  }
+                                />
+                                Nộp bài
+                              </label>
+                            )}
+                            {myIsLeader && !isLeader && (
+                              <button
+                                type="button"
+                                className="text-rose-600 hover:underline"
+                                onClick={() =>
+                                  removeMember(
+                                    myGroupData.id || myGroupData.Id,
+                                    (m.userId || m.UserId || "").toString()
+                                  )
+                                }
+                              >
+                                Xóa
+                              </button>
+                            )}
+                            {isLeader && <span className="text-[10px] text-indigo-600">Leader</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {myIsLeader && (
+                    <div className="space-y-2">
+                      <div className="text-xs text-gray-500">Thêm thành viên</div>
+                      <div className="grid sm:grid-cols-2 gap-2 max-h-32 overflow-auto pr-1">
+                        {availableStudents.length === 0 && (
+                          <div className="text-xs text-gray-500">Không còn học viên để thêm.</div>
+                        )}
+                        {availableStudents.map((s: any) => {
+                          const uid = (s.userId || "").toString();
+                          const checked = addMemberIds.includes(uid);
+                          return (
+                            <label key={uid} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  setAddMemberIds((prev) =>
+                                    e.target.checked ? [...prev, uid] : prev.filter((x) => x !== uid)
+                                  );
+                                }}
+                              />
+                              <span className="truncate">{s.name || s.email}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={groupBusy || addMemberIds.length === 0}
+                        onClick={() => addMembers((myGroupData.id || myGroupData.Id) as string)}
+                        className="rounded-full border border-indigo-200 text-indigo-700 px-4 py-2 text-xs hover:bg-indigo-50 disabled:opacity-60"
+                      >
+                        Thêm thành viên
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <form onSubmit={submitFile} className="flex flex-col gap-4">
             {/* Actions */}
             <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800">
+              <label className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm ${canSubmitNow ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800" : "opacity-60 cursor-not-allowed"}`}>
                 <input
                   multiple
                   type="file"
                   accept={acceptAttr}
                   className="hidden"
+                  disabled={!canSubmitNow}
                   onChange={(e)=> {
                     const list = Array.from(e.target.files || []);
                     if (list.length === 0) return;
@@ -693,10 +1152,15 @@ export default function AssignmentDetailPage() {
                 />
                 + Thêm tệp
               </label>
-              <button type="submit" disabled={uploading || files.length === 0} className="rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-5 py-2 text-sm">
+              <button type="submit" disabled={uploading || files.length === 0 || !canSubmitNow} className="rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-5 py-2 text-sm">
                 {uploading ? 'Đang nộp...' : 'Nộp bài'}
               </button>
             </div>
+            {groupEnabled && !canSubmitNow && (
+              <div className="text-xs text-rose-600">
+                Chỉ trưởng nhóm hoặc thành viên được phân quyền mới có thể nộp bài.
+              </div>
+            )}
             {(allowedTokens.length > 0 || maxFileSizeBytes) && (
               <div className="text-xs text-gray-500 dark:text-gray-400">
                 {allowedTokens.length > 0 && <span>Định dạng: {allowedTypesLabel}</span>}
@@ -748,14 +1212,20 @@ export default function AssignmentDetailPage() {
                   const gradeStatus = s.gradeStatus ?? s.GradeStatus ?? gradeDetail?.status ?? gradeDetail?.Status ?? "";
                   const returnedFileKey = gradeDetail?.returnedFileKey ?? gradeDetail?.ReturnedFileKey ?? null;
                   const returnedFileName = gradeDetail?.returnedFileName ?? gradeDetail?.ReturnedFileName ?? null;
+                  const submittedById = s.submittedById ?? s.SubmittedById ?? null;
+                  const submittedByName = s.submittedByName ?? s.SubmittedByName ?? "";
+                  const groupName = s.groupName ?? s.GroupName ?? "";
+                  const isMineSubmit = !groupEnabled || !submittedById || String(submittedById) === String(user?.id ?? user?.userId ?? user?.Id ?? "");
                   const isReturned = gradeStatus === "returned";
                   const isGraded = gradeStatus === "graded" || gradeStatus === "returned";
                   const isPastDue = !!(dueTs && Date.now() > dueTs);
-                  const canCancel = !isGraded && !isPastDue;
+                  const canCancel = !isGraded && !isPastDue && (!groupEnabled || myCanSubmit);
                   const cancelTitle = isGraded
                     ? "Bài đã được chấm nên không thể hủy."
                     : isPastDue
                     ? "Đã quá hạn nộp bài nên không thể hủy."
+                    : groupEnabled && !myCanSubmit
+                    ? "Bạn không có quyền hủy bài nộp của nhóm."
                     : "Hủy nộp";
                   const gradeLabel =
                     isReturned && grade != null
@@ -782,7 +1252,13 @@ export default function AssignmentDetailPage() {
                               {label}
                             </span>
                           </div>
-                          <div className="text-xs text-gray-500">{ts} • {(size/1024).toFixed(1)} KB</div>
+                          <div className="text-xs text-gray-500">
+                            {ts} • {(size/1024).toFixed(1)} KB
+                            {groupEnabled && groupName ? ` • ${groupName}` : ""}
+                          </div>
+                          {groupEnabled && submittedByName && !isMineSubmit && (
+                            <div className="text-xs text-gray-500">Nộp bởi {submittedByName}</div>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -831,7 +1307,9 @@ export default function AssignmentDetailPage() {
       {isTeacher && (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-0 overflow-hidden shadow-sm">
           <div className="px-6 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-3 bg-gray-50/70 dark:bg-zinc-900/60">
-            <div className="text-lg font-semibold text-gray-900 dark:text-white">Bài tập của học viên</div>
+            <div className="text-lg font-semibold text-gray-900 dark:text-white">
+              {groupEnabled ? "Bài tập của nhóm" : "Bài tập của học viên"}
+            </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="inline-flex items-center rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
                 Đã nộp: {stats.submitted}
@@ -867,11 +1345,11 @@ export default function AssignmentDetailPage() {
                 <input
                   value={rosterQuery}
                   onChange={(e) => setRosterQuery(e.target.value)}
-                  placeholder="Tìm học viên..."
+                  placeholder={groupEnabled ? "Tìm nhóm..." : "Tìm học viên..."}
                   className="w-full rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 py-2 text-sm outline-none focus:border-indigo-400"
                 />
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">Tất cả học viên</div>
+                  <div className="text-sm font-medium">{groupEnabled ? "Tất cả nhóm" : "Tất cả học viên"}</div>
                   <select value={filter} onChange={(e)=> setFilter(e.target.value as any)} className="text-xs border rounded-full px-3 py-1 bg-white dark:bg-zinc-900 focus:outline-none">
                     <option value="all">Tất cả</option>
                     <option value="submitted">Đã nộp</option>
@@ -881,20 +1359,28 @@ export default function AssignmentDetailPage() {
               </div>
               <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
                 {roster.map((r:any, idx:number)=>{
+                  const isGroupRow = groupEnabled;
                   const email = (r.email||'').toLowerCase();
                   const uid = (r.userId||'').toString();
-                  const active = selectedEmail === uid;
+                  const rowId = isGroupRow ? (r.id || "").toString() : uid;
+                  const active = isGroupRow ? selectedGroupId === rowId : selectedEmail === uid;
                   const g = r.group;
-                  const keyStable = r.userId || email || r.name || String(idx);
+                  const keyStable = rowId || r.userId || email || r.name || String(idx);
                   const isLate = !!(dueTs && g && g.latestAt > dueTs);
-                  const avatarSrc = getAvatar(r);
+                  const avatarSrc = isGroupRow ? undefined : getAvatar(r);
                   const statusDotClass = g ? (isLate ? "bg-rose-500" : "bg-emerald-500") : "bg-gray-300";
                   const statusTitle = g ? (isLate ? "Nộp muộn" : "Đã nộp") : "Chưa nộp";
+                  const memberCount = isGroupRow ? (r.members?.length || 0) : 0;
+                  const leaderName = isGroupRow ? (r.leaderName || r.members?.find((m:any) => (m.role || "").toLowerCase() === "leader")?.name) : "";
                   return (
                     <button
                       key={keyStable}
                       onClick={() => {
-                        setSelectedEmail(uid);
+                        if (isGroupRow) {
+                          setSelectedGroupId(rowId);
+                        } else {
+                          setSelectedEmail(uid);
+                        }
                         setGradeInput(g?.grade ?? "");
                         setFeedbackInput("");
                         setReturnFile(null);
@@ -910,16 +1396,22 @@ export default function AssignmentDetailPage() {
                           />
                         ) : (
                           <span className="h-9 w-9 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 flex items-center justify-center text-xs font-semibold">
-                            {getInitials(r.name || r.email || "?")}
+                            {getInitials(r.name || r.email || "N")}
                           </span>
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                                {r.name || "Học viên"}
+                                {r.name || (isGroupRow ? "Nhóm" : "Học viên")}
                               </div>
-                              <div className="text-xs text-gray-500 truncate">{r.email || "—"}</div>
+                              {isGroupRow ? (
+                                <div className="text-xs text-gray-500 truncate">
+                                  {leaderName ? `Trưởng nhóm: ${leaderName}` : `${memberCount} thành viên`}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-500 truncate">{r.email || "—"}</div>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               {g && isLate && (
@@ -956,30 +1448,52 @@ export default function AssignmentDetailPage() {
 
             {/* Right detail */}
             <div className="lg:col-span-2 p-5">
-              {!selectedEmail ? (
-                <div className="text-gray-500">Chọn một học viên để xem chi tiết.</div>
+              {(groupEnabled ? !selectedGroupEntry : !selectedEmail) ? (
+                <div className="text-gray-500">
+                  {groupEnabled ? "Chọn một nhóm để xem chi tiết." : "Chọn một học viên để xem chi tiết."}
+                </div>
               ) : (
                 <div className="space-y-4">
                   <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950/40 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex items-center gap-3 min-w-0">
-                        {selectedAvatar ? (
-                          <img
-                            src={selectedAvatar}
-                            alt={selectedStudent?.name || "Học viên"}
-                            className="h-10 w-10 rounded-full object-cover border border-white/30"
-                          />
+                        {groupEnabled ? (
+                          <>
+                            <span className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold">
+                              {getInitials(selectedGroupEntry?.name || "N")}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                                {selectedGroupEntry?.name || "Nhóm"}
+                              </div>
+                              <div className="text-xs text-gray-500 truncate">
+                                {selectedGroupEntry?.leaderName
+                                  ? `Trưởng nhóm: ${selectedGroupEntry.leaderName}`
+                                  : `${selectedGroupEntry?.members?.length || 0} thành viên`}
+                              </div>
+                            </div>
+                          </>
                         ) : (
-                          <span className="h-10 w-10 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 flex items-center justify-center text-sm font-semibold">
-                            {getInitials(selectedStudent?.name || selectedStudent?.email || "?")}
-                          </span>
+                          <>
+                            {selectedAvatar ? (
+                              <img
+                                src={selectedAvatar}
+                                alt={selectedStudent?.name || "Học viên"}
+                                className="h-10 w-10 rounded-full object-cover border border-white/30"
+                              />
+                            ) : (
+                              <span className="h-10 w-10 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 flex items-center justify-center text-sm font-semibold">
+                                {getInitials(selectedStudent?.name || selectedStudent?.email || "?")}
+                              </span>
+                            )}
+                            <div className="min-w-0">
+                              <div className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                                {selectedStudent?.name || "Học viên"}
+                              </div>
+                              <div className="text-xs text-gray-500 truncate">{selectedStudent?.email || "-"}</div>
+                            </div>
+                          </>
                         )}
-                        <div className="min-w-0">
-                          <div className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                            {selectedStudent?.name || "Học viên"}
-                          </div>
-                          <div className="text-xs text-gray-500 truncate">{selectedStudent?.email || "-"}</div>
-                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs">
                         <span className={`inline-flex items-center rounded-full border px-2.5 py-1 ${detailSubmitClass}`}>
@@ -990,18 +1504,33 @@ export default function AssignmentDetailPage() {
                         </span>
                       </div>
                     </div>
+                    {groupEnabled && selectedGroupEntry?.members?.length ? (
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-300">
+                        {selectedGroupEntry.members.map((m: any) => (
+                          <span key={m.userId} className="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-800 px-2 py-1">
+                            <span className="h-5 w-5 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-semibold">
+                              {getInitials(m.name || m.email || "?")}
+                            </span>
+                            <span className="truncate max-w-[160px]">{m.name || m.email}</span>
+                            {String(m.role || "").toLowerCase() === "leader" && (
+                              <span className="text-[10px] text-indigo-600">Leader</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950/40 p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-sm font-semibold">Tệp đính kèm</div>
-                      {selectedGroup?.files?.length ? (
-                        <div className="text-xs text-gray-500">{selectedGroup.files.length} tệp</div>
+                      {selectedSubmission?.files?.length ? (
+                        <div className="text-xs text-gray-500">{selectedSubmission.files.length} tệp</div>
                       ) : null}
                     </div>
-                    {selectedGroup?.files?.length ? (
+                    {selectedSubmission?.files?.length ? (
                       <div className="grid sm:grid-cols-2 gap-2">
-                        {selectedGroup.files.map((f:any, i:number)=> {
+                        {selectedSubmission.files.map((f:any, i:number)=> {
                           const late = !!(dueTs && f.at > dueTs);
                           const fileKey = f.fileKey || f.FileKey || "";
                           const contentType = f.contentType || f.ContentType || "";
@@ -1048,15 +1577,15 @@ export default function AssignmentDetailPage() {
                   <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950/40 p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-sm font-semibold">Chấm điểm</div>
-                      {selectedGroup?.gradeStatus === "returned" ? (
+                      {selectedSubmission?.gradeStatus === "returned" ? (
                         <span className="inline-flex items-center gap-1 text-xs rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5">
                           <CheckCircle2 size={14} /> Đã trả
                         </span>
-                      ) : selectedGroup?.grade != null ? (
+                      ) : selectedSubmission?.grade != null ? (
                         <span className="inline-flex items-center gap-1 text-xs rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5">
                           <CheckCircle2 size={14} /> Đã chấm
                         </span>
-                      ) : selectedGroup?.gradeStatus === "pending" ? (
+                      ) : selectedSubmission?.gradeStatus === "pending" ? (
                         <span className="inline-flex items-center gap-1 text-xs rounded-full bg-amber-50 text-amber-700 px-2 py-0.5">
                           Đang chấm
                         </span>
@@ -1106,13 +1635,13 @@ export default function AssignmentDetailPage() {
                               {returnFile.name}
                             </span>
                           )}
-                          {selectedGroup?.returnedFileKey && (
+                          {selectedSubmission?.returnedFileKey && (
                             <button
                               className="text-xs rounded-full border px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
                               onClick={() =>
                                 openFileViewer({
-                                  key: selectedGroup.returnedFileKey,
-                                  name: selectedGroup.returnedFileName || "Bài đã chấm",
+                                  key: selectedSubmission.returnedFileKey,
+                                  name: selectedSubmission.returnedFileName || "Bài đã chấm",
                                 })
                               }
                             >
@@ -1122,21 +1651,21 @@ export default function AssignmentDetailPage() {
                         </div>
                         <button
                           className="w-full md:w-auto rounded-full bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 text-sm shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                          disabled={!selectedGroup?.files?.length}
+                          disabled={!selectedSubmission?.files?.length}
                           onClick={async () => {
                           const raw = String(gradeInput ?? "").trim();
                           const inputVal = raw === "" ? NaN : Number(raw);
-                          const score = !isNaN(inputVal) ? inputVal : selectedGroup?.grade;
+                          const score = !isNaN(inputVal) ? inputVal : selectedSubmission?.grade;
                           if (score == null || isNaN(Number(score))) {
                             toast.error("Điểm không hợp lệ");
                             return;
                           }
-                          const firstId = selectedGroup?.files?.[0]?.id;
+                          const firstId = selectedSubmission?.files?.[0]?.id;
                           if (!firstId) {
                             toast.error("Chưa có bài nộp để chấm");
                             return;
                           }
-                          const feedback = feedbackInput || selectedGroup?.feedback || undefined;
+                          const feedback = feedbackInput || selectedSubmission?.feedback || undefined;
                           try {
                             if (returnFile) {
                               const fd = new FormData();
@@ -1171,18 +1700,18 @@ export default function AssignmentDetailPage() {
                         </button>
                       </div>
                     </div>
-                    {selectedGroup?.feedback && (
+                    {selectedSubmission?.feedback && (
                       <div className="mt-3 text-xs">
                         <div className="rounded-md bg-gray-50 dark:bg-zinc-900 px-3 py-2 text-gray-700 dark:text-gray-300">
                           <div className="mb-1 inline-flex items-center gap-1 text-[11px] uppercase tracking-wide text-gray-500"><MessageSquare size={12}/> Nhận xét</div>
-                          <div className="italic">{selectedGroup?.feedback}</div>
+                          <div className="italic">{selectedSubmission?.feedback}</div>
                         </div>
                       </div>
                     )}
                   </div>
 
                   {/* Trao đổi riêng với học viên này (đưa xuống dưới cùng) */}
-                  <CommentsPanel assignmentId={id} studentId={selectedEmail} />
+                  <CommentsPanel assignmentId={id} studentId={selectedCommentUserId} />
 
                   {/* Nhận xét là chung cho toàn bài: bỏ danh sách theo tệp */}
                 </div>

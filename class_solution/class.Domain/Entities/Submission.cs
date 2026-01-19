@@ -10,6 +10,9 @@ namespace class_api.Domain
         public Guid UserId { get; set; }
         public User? User { get; set; }
 
+        public Guid? GroupId { get; set; }
+        public AssignmentGroup? Group { get; set; }
+
         public string FileKey { get; set; } = default!;
         public string? ContentType { get; set; }
         public long FileSize { get; set; }
