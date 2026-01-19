@@ -92,6 +92,13 @@ namespace class_api.Controllers
             return (minVal, maxVal);
         }
 
+        private static string? NormalizeGroupMode(bool enabled, string? mode)
+        {
+            if (!enabled) return null;
+            if (string.Equals(mode, "random", StringComparison.OrdinalIgnoreCase)) return "random";
+            return "student";
+        }
+
         [HttpPost]
         [Consumes("application/json")]
         public async Task<IActionResult> Create(CreateAssignmentDto dto)
@@ -106,6 +113,7 @@ namespace class_api.Controllers
             var allowedTypes = FileTypeRules.NormalizeAllowedTypes(dto.AllowedFileTypes);
             var maxSizeBytes = ToBytes(dto.MaxFileSizeMb);
             var (minMembers, maxMembers) = NormalizeGroupSize(dto.GroupEnabled, dto.GroupMinMembers, dto.GroupMaxMembers);
+            var groupMode = NormalizeGroupMode(dto.GroupEnabled, dto.GroupMode);
 
             var a = new Assignment
             {
@@ -119,6 +127,7 @@ namespace class_api.Controllers
                 GroupEnabled = dto.GroupEnabled,
                 GroupMinMembers = minMembers,
                 GroupMaxMembers = maxMembers,
+                GroupMode = groupMode,
                 CreatedBy = _me.UserId
             };
             _db.Assignments.Add(a);
@@ -136,6 +145,7 @@ namespace class_api.Controllers
                 a.GroupEnabled,
                 a.GroupMinMembers,
                 a.GroupMaxMembers,
+                a.GroupMode,
                 CreatedAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc)
             });
 
@@ -158,7 +168,7 @@ namespace class_api.Controllers
                 }
             }
 
-            return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers });
+            return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers, a.GroupMode });
         }
 
         [HttpPost("with-materials")]
@@ -174,6 +184,7 @@ namespace class_api.Controllers
             [FromForm] bool GroupEnabled = false,
             [FromForm] int? GroupMinMembers = null,
             [FromForm] int? GroupMaxMembers = null,
+            [FromForm] string? GroupMode = null,
             [FromForm] IFormFileCollection? Files = null,
             [FromForm] string? Links = null,
             CancellationToken ct = default)
@@ -194,6 +205,7 @@ namespace class_api.Controllers
             var allowedTypes = FileTypeRules.NormalizeAllowedTypes(AllowedFileTypes);
             var maxSizeBytes = ToBytes(MaxFileSizeMb);
             var (minMembers2, maxMembers2) = NormalizeGroupSize(GroupEnabled, GroupMinMembers, GroupMaxMembers);
+            var groupMode2 = NormalizeGroupMode(GroupEnabled, GroupMode);
 
             var a = new Assignment
             {
@@ -207,6 +219,7 @@ namespace class_api.Controllers
                 GroupEnabled = GroupEnabled,
                 GroupMinMembers = minMembers2,
                 GroupMaxMembers = maxMembers2,
+                GroupMode = groupMode2,
                 CreatedBy = _me.UserId
             };
             _db.Assignments.Add(a);
@@ -262,6 +275,7 @@ namespace class_api.Controllers
                 groupEnabled = a.GroupEnabled,
                 groupMinMembers = a.GroupMinMembers,
                 groupMaxMembers = a.GroupMaxMembers,
+                groupMode = a.GroupMode,
                 createdAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
                 materials = items
             });
@@ -285,7 +299,7 @@ namespace class_api.Controllers
                 }
             }
 
-            return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers });
+            return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers, a.GroupMode });
         }
 
         [HttpGet("{id:guid}")]
@@ -298,7 +312,7 @@ namespace class_api.Controllers
             if (member == null) return Forbid();
 
             var due = a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null;
-            return Ok(new { a.Id, a.Title, a.Instructions, DueAt = due, a.MaxPoints, a.ClassroomId, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers });
+            return Ok(new { a.Id, a.Title, a.Instructions, DueAt = due, a.MaxPoints, a.ClassroomId, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers, a.GroupMode });
         }
 
         [HttpGet("classroom/{classroomId:guid}")]
@@ -310,7 +324,7 @@ namespace class_api.Controllers
             var list = await _db.Assignments
                 .Where(a => a.ClassroomId == classroomId)
                 .OrderByDescending(a => a.CreatedAt)
-                .Select(a => new { a.Id, a.Title, DueAt = (DateTime?)(a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : null), a.MaxPoints, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers })
+                .Select(a => new { a.Id, a.Title, DueAt = (DateTime?)(a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : null), a.MaxPoints, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers, a.GroupMode })
                 .ToListAsync();
 
             return Ok(list);
@@ -416,9 +430,11 @@ namespace class_api.Controllers
             a.AllowedFileTypes = FileTypeRules.NormalizeAllowedTypes(dto.AllowedFileTypes);
             a.MaxFileSizeBytes = ToBytes(dto.MaxFileSizeMb);
             var (minMembers3, maxMembers3) = NormalizeGroupSize(dto.GroupEnabled, dto.GroupMinMembers, dto.GroupMaxMembers);
+            var groupMode3 = NormalizeGroupMode(dto.GroupEnabled, dto.GroupMode);
             a.GroupEnabled = dto.GroupEnabled;
             a.GroupMinMembers = minMembers3;
             a.GroupMaxMembers = maxMembers3;
+            a.GroupMode = groupMode3;
             a.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
@@ -433,7 +449,8 @@ namespace class_api.Controllers
                 a.MaxFileSizeBytes,
                 a.GroupEnabled,
                 a.GroupMinMembers,
-                a.GroupMaxMembers
+                a.GroupMaxMembers,
+                a.GroupMode
             });
 
             await _activityStream.PublishAsync(new ActivityEvent("assignment",
@@ -443,7 +460,7 @@ namespace class_api.Controllers
                 DateTime.UtcNow));
 
             var due2 = a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null;
-            return Ok(new { a.Id, a.Title, a.Instructions, DueAt = due2, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers });
+            return Ok(new { a.Id, a.Title, a.Instructions, DueAt = due2, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers, a.GroupMode });
         }
 
         [HttpDelete("{id:guid}")]

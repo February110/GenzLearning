@@ -14,6 +14,7 @@ namespace class_api.Infrastructure.Configurations
             builder.Property(a => a.CreatedAt).IsRequired();
             builder.Property(a => a.UpdatedAt).IsRequired();
             builder.Property(a => a.GroupEnabled).HasDefaultValue(false);
+            builder.Property(a => a.GroupMode).HasMaxLength(16).HasDefaultValue("student");
 
             builder.HasOne(a => a.Classroom)
                 .WithMany(c => c.Assignments)

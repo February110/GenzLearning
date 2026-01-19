@@ -13,6 +13,7 @@ type FormState = {
   groupEnabled: boolean;
   groupMinMembers: number | "";
   groupMaxMembers: number | "";
+  groupMode: "student" | "random";
 };
 
 interface AssignmentEditModalProps {
@@ -177,6 +178,36 @@ export default function AssignmentEditModal({
               </label>
               {form.groupEnabled && (
                 <>
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Hình thức tạo nhóm</div>
+                    <div className="flex flex-wrap items-center gap-4 text-sm">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="editGroupMode"
+                          value="student"
+                          checked={form.groupMode !== "random"}
+                          onChange={() => setForm({ ...form, groupMode: "student" })}
+                        />
+                        Học viên tự ghép nhóm
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="editGroupMode"
+                          value="random"
+                          checked={form.groupMode === "random"}
+                          onChange={() => setForm({ ...form, groupMode: "random" })}
+                        />
+                        Giáo viên chia nhóm ngẫu nhiên
+                      </label>
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Hệ thống hỗ trợ hai hình thức tạo nhóm cho bài tập: học viên tự ghép nhóm và giáo viên tạo nhóm
+                      ngẫu nhiên. Giáo viên có thể lựa chọn hình thức phù hợp khi tạo bài tập nhằm đảm bảo tính linh
+                      hoạt và hiệu quả trong tổ chức học tập theo nhóm.
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-500 dark:text-gray-400">Số thành viên tối thiểu</label>

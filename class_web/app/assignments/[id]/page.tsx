@@ -57,6 +57,10 @@ export default function AssignmentDetailPage() {
   const groupEnabled = useMemo(() => {
     return !!(assignment?.groupEnabled ?? assignment?.GroupEnabled);
   }, [assignment]);
+  const groupMode = useMemo(() => {
+    const raw = assignment?.groupMode ?? assignment?.GroupMode;
+    return String(raw || "").toLowerCase() === "random" ? "random" : "student";
+  }, [assignment]);
   const allowedTokens = useMemo<string[]>(() => {
     const raw = String(assignment?.allowedFileTypes || assignment?.AllowedFileTypes || "");
     return raw
@@ -974,51 +978,57 @@ export default function AssignmentDetailPage() {
                 )}
               </div>
               {!myGroupData ? (
-                <div className="space-y-3">
-                  <div className="text-sm text-gray-600">Bạn chưa có nhóm cho bài tập này.</div>
-                  <div className="grid gap-3">
-                    <input
-                      value={groupName}
-                      onChange={(e) => setGroupName(e.target.value)}
-                      placeholder="Tên nhóm"
-                      className="w-full rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 py-2 text-sm"
-                    />
-                    <div>
-                      <div className="text-xs text-gray-500 mb-2">Chọn thành viên (không bắt buộc)</div>
-                      <div className="grid sm:grid-cols-2 gap-2 max-h-40 overflow-auto pr-1">
-                        {availableStudents.length === 0 && (
-                          <div className="text-xs text-gray-500">Không còn học viên để thêm.</div>
-                        )}
-                        {availableStudents.map((s: any) => {
-                          const uid = (s.userId || "").toString();
-                          const checked = newMemberIds.includes(uid);
-                          return (
-                            <label key={uid} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => {
-                                  setNewMemberIds((prev) =>
-                                    e.target.checked ? [...prev, uid] : prev.filter((x) => x !== uid)
-                                  );
-                                }}
-                              />
-                              <span className="truncate">{s.name || s.email}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={groupBusy || !groupName.trim()}
-                      onClick={createGroup}
-                      className="self-start rounded-full bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-60"
-                    >
-                      Tạo nhóm
-                    </button>
+                groupMode === "random" ? (
+                  <div className="text-sm text-gray-600">
+                    Giáo viên sẽ chia nhóm ngẫu nhiên cho bài tập này. Vui lòng chờ thông báo.
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-sm text-gray-600">Bạn chưa có nhóm cho bài tập này.</div>
+                    <div className="grid gap-3">
+                      <input
+                        value={groupName}
+                        onChange={(e) => setGroupName(e.target.value)}
+                        placeholder="Tên nhóm"
+                        className="w-full rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 py-2 text-sm"
+                      />
+                      <div>
+                        <div className="text-xs text-gray-500 mb-2">Chọn thành viên (không bắt buộc)</div>
+                        <div className="grid sm:grid-cols-2 gap-2 max-h-40 overflow-auto pr-1">
+                          {availableStudents.length === 0 && (
+                            <div className="text-xs text-gray-500">Không còn học viên để thêm.</div>
+                          )}
+                          {availableStudents.map((s: any) => {
+                            const uid = (s.userId || "").toString();
+                            const checked = newMemberIds.includes(uid);
+                            return (
+                              <label key={uid} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    setNewMemberIds((prev) =>
+                                      e.target.checked ? [...prev, uid] : prev.filter((x) => x !== uid)
+                                    );
+                                  }}
+                                />
+                                <span className="truncate">{s.name || s.email}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={groupBusy || !groupName.trim()}
+                        onClick={createGroup}
+                        className="self-start rounded-full bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-60"
+                      >
+                        Tạo nhóm
+                      </button>
+                    </div>
+                  </div>
+                )
               ) : (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">

@@ -10,6 +10,7 @@ namespace class_api.Application.Dtos
        int? MaxFileSizeMb = null,
        bool GroupEnabled = false,
        int? GroupMinMembers = null,
-       int? GroupMaxMembers = null
+       int? GroupMaxMembers = null,
+       string? GroupMode = null
    );
 }

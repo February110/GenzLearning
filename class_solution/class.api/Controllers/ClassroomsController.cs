@@ -163,6 +163,7 @@ namespace class_api.Controllers
                         a.GroupEnabled,
                         a.GroupMinMembers,
                         a.GroupMaxMembers,
+                        a.GroupMode,
                         CreatedAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
                         Grades = a.Grades.Select(g => new
                         {

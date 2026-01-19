@@ -43,6 +43,7 @@ export default function ClassroomDetailPage() {
     groupEnabled: boolean;
     groupMinMembers: number | "";
     groupMaxMembers: number | "";
+    groupMode: "student" | "random";
   }>({
     title: "",
     instructions: "",
@@ -53,6 +54,7 @@ export default function ClassroomDetailPage() {
     groupEnabled: false,
     groupMinMembers: "",
     groupMaxMembers: "",
+    groupMode: "student",
   });
   const [attachFiles, setAttachFiles] = useState<File[]>([]);
   const [linkInput, setLinkInput] = useState("");
@@ -287,6 +289,7 @@ export default function ClassroomDetailPage() {
     groupEnabled: boolean;
     groupMinMembers: number | "";
     groupMaxMembers: number | "";
+    groupMode: "student" | "random";
   }>({
     title: "",
     instructions: "",
@@ -297,6 +300,7 @@ export default function ClassroomDetailPage() {
     groupEnabled: false,
     groupMinMembers: "",
     groupMaxMembers: "",
+    groupMode: "student",
   });
   const [editFiles, setEditFiles] = useState<File[]>([]);
   const [editLinks, setEditLinks] = useState<string[]>([]);
@@ -435,6 +439,7 @@ export default function ClassroomDetailPage() {
           GroupEnabled: a.GroupEnabled ?? a.groupEnabled ?? false,
           GroupMinMembers: a.GroupMinMembers ?? a.groupMinMembers ?? null,
           GroupMaxMembers: a.GroupMaxMembers ?? a.groupMaxMembers ?? null,
+          GroupMode: a.GroupMode ?? a.groupMode ?? "student",
           CreatedAt: a.CreatedAt ?? a.createdAt,
           ClassroomId: a.ClassroomId ?? a.classroomId
         };
@@ -459,7 +464,8 @@ export default function ClassroomDetailPage() {
             MaxFileSizeBytes: a.MaxFileSizeBytes ?? a.maxFileSizeBytes ?? x.MaxFileSizeBytes ?? x.maxFileSizeBytes ?? null,
             GroupEnabled: a.GroupEnabled ?? a.groupEnabled ?? x.GroupEnabled ?? x.groupEnabled ?? false,
             GroupMinMembers: a.GroupMinMembers ?? a.groupMinMembers ?? x.GroupMinMembers ?? x.groupMinMembers ?? null,
-            GroupMaxMembers: a.GroupMaxMembers ?? a.groupMaxMembers ?? x.GroupMaxMembers ?? x.groupMaxMembers ?? null
+            GroupMaxMembers: a.GroupMaxMembers ?? a.groupMaxMembers ?? x.GroupMaxMembers ?? x.groupMaxMembers ?? null,
+            GroupMode: a.GroupMode ?? a.groupMode ?? x.GroupMode ?? x.groupMode ?? "student"
           };
         });
         return { ...prev, Assignments: next, assignments: next };
@@ -513,6 +519,7 @@ export default function ClassroomDetailPage() {
         if (!Number.isNaN(maxSizeMb) && maxSizeMb > 0) fd.append("MaxFileSizeMb", String(maxSizeMb));
         fd.append("GroupEnabled", String(!!form.groupEnabled));
         if (form.groupEnabled) {
+          fd.append("GroupMode", form.groupMode === "random" ? "random" : "student");
           const minMembers = Number(form.groupMinMembers);
           const maxMembers = Number(form.groupMaxMembers);
           if (!Number.isNaN(minMembers) && minMembers > 0) fd.append("GroupMinMembers", String(minMembers));
@@ -536,6 +543,7 @@ export default function ClassroomDetailPage() {
           GroupEnabled: !!form.groupEnabled,
           GroupMinMembers: form.groupEnabled && !Number.isNaN(minMembers) && minMembers > 0 ? minMembers : null,
           GroupMaxMembers: form.groupEnabled && !Number.isNaN(maxMembers) && maxMembers > 0 ? maxMembers : null,
+          GroupMode: form.groupEnabled ? (form.groupMode === "random" ? "random" : "student") : null,
         });
       }
 
@@ -553,6 +561,7 @@ export default function ClassroomDetailPage() {
         groupEnabled: false,
         groupMinMembers: "",
         groupMaxMembers: "",
+        groupMode: "student",
       });
       setAttachFiles([]);
       setLinks([]);
@@ -570,6 +579,8 @@ export default function ClassroomDetailPage() {
     const groupEnabled = !!(a.groupEnabled ?? a.GroupEnabled);
     const groupMinMembers = a.groupMinMembers ?? a.GroupMinMembers ?? "";
     const groupMaxMembers = a.groupMaxMembers ?? a.GroupMaxMembers ?? "";
+    const groupModeRaw = (a.groupMode ?? a.GroupMode ?? "student").toString().toLowerCase();
+    const groupMode = groupModeRaw === "random" ? "random" : "student";
     setEditing(a);
     setEditForm({
       title: a.title || "",
@@ -581,6 +592,7 @@ export default function ClassroomDetailPage() {
       groupEnabled,
       groupMinMembers,
       groupMaxMembers,
+      groupMode,
     });
     const mats = a.attachments || a.materials || a.files || [];
     const detectedLinks = (mats || [])
@@ -609,6 +621,7 @@ export default function ClassroomDetailPage() {
         groupEnabled: !!editForm.groupEnabled,
         groupMinMembers: editForm.groupEnabled && !Number.isNaN(minMembers) && minMembers > 0 ? minMembers : null,
         groupMaxMembers: editForm.groupEnabled && !Number.isNaN(maxMembers) && maxMembers > 0 ? maxMembers : null,
+        groupMode: editForm.groupEnabled ? (editForm.groupMode === "random" ? "random" : "student") : null,
       };
       await api.put(`/assignments/${id}`, payload);
 

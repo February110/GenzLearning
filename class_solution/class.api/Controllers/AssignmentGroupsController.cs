@@ -32,6 +32,11 @@ namespace class_api.Controllers
             return (assignment, member, isTeacher);
         }
 
+        private static string ResolveGroupMode(Assignment assignment)
+        {
+            return string.Equals(assignment.GroupMode, "random", StringComparison.OrdinalIgnoreCase) ? "random" : "student";
+        }
+
         private static object MapGroup(AssignmentGroup group)
         {
             var leaderMember = group.Members.FirstOrDefault(m => m.UserId == group.LeaderId) ??
@@ -120,9 +125,13 @@ namespace class_api.Controllers
 
             var assignment = memberInfo.Value.assignment;
             var isTeacher = memberInfo.Value.isTeacher;
+            var mode = ResolveGroupMode(assignment);
 
             if (!assignment.GroupEnabled)
                 return BadRequest(new { message = "Bài tập này không bật nộp theo nhóm." });
+
+            if (mode == "random" && !isTeacher)
+                return Forbid();
 
             var leaderId = isTeacher ? dto.LeaderId : _me.UserId;
             if (!leaderId.HasValue || leaderId.Value == Guid.Empty)
@@ -208,7 +217,9 @@ namespace class_api.Controllers
 
             var isTeacher = memberInfo.Value.isTeacher;
             var isLeader = group.LeaderId == _me.UserId;
+            var mode = ResolveGroupMode(memberInfo.Value.assignment);
             if (!isTeacher && !isLeader) return Forbid();
+            if (mode == "random" && !isTeacher) return Forbid();
 
             if (!string.IsNullOrWhiteSpace(dto.Name))
                 group.Name = dto.Name.Trim();
@@ -257,7 +268,9 @@ namespace class_api.Controllers
 
             var isTeacher = memberInfo.Value.isTeacher;
             var isLeader = group.LeaderId == _me.UserId;
+            var mode = ResolveGroupMode(memberInfo.Value.assignment);
             if (!isTeacher && !isLeader) return Forbid();
+            if (mode == "random" && !isTeacher) return Forbid();
 
             var memberIds = dto.MemberIds.Where(id => id != Guid.Empty).Distinct().ToList();
 
@@ -315,7 +328,9 @@ namespace class_api.Controllers
 
             var isTeacher = memberInfo.Value.isTeacher;
             var isLeader = group.LeaderId == _me.UserId;
+            var mode = ResolveGroupMode(memberInfo.Value.assignment);
             if (!isTeacher && !isLeader) return Forbid();
+            if (mode == "random" && !isTeacher) return Forbid();
 
             var member = group.Members.FirstOrDefault(m => m.UserId == userId);
             if (member == null) return NotFound(new { message = "Không tìm thấy thành viên." });
@@ -351,7 +366,9 @@ namespace class_api.Controllers
 
             var isTeacher = memberInfo.Value.isTeacher;
             var isLeader = group.LeaderId == _me.UserId;
+            var mode = ResolveGroupMode(memberInfo.Value.assignment);
             if (!isTeacher && !isLeader) return Forbid();
+            if (mode == "random" && !isTeacher) return Forbid();
 
             if (group.LeaderId == userId)
                 return BadRequest(new { message = "Không thể xoá trưởng nhóm. Hãy đổi trưởng nhóm trước." });
@@ -364,6 +381,109 @@ namespace class_api.Controllers
             await _db.SaveChangesAsync(ct);
 
             return Ok(new { message = "Đã xóa thành viên khỏi nhóm." });
+        }
+
+        [HttpPost("randomize")]
+        public async Task<IActionResult> Randomize(Guid assignmentId, CancellationToken ct)
+        {
+            var memberInfo = await LoadMember(assignmentId, ct);
+            if (memberInfo == null) return NotFound();
+            if (memberInfo.Value.member == null) return Forbid();
+            if (!memberInfo.Value.isTeacher) return Forbid();
+            if (!memberInfo.Value.assignment.GroupEnabled)
+                return BadRequest(new { message = "Bài tập này không bật nộp theo nhóm." });
+
+            var mode = ResolveGroupMode(memberInfo.Value.assignment);
+            if (mode != "random")
+                return BadRequest(new { message = "Bài tập này không chọn hình thức chia nhóm ngẫu nhiên." });
+
+            var existingGroups = await _db.AssignmentGroups.AnyAsync(g => g.AssignmentId == assignmentId, ct);
+            if (existingGroups)
+                return BadRequest(new { message = "Đã có nhóm cho bài tập này. Vui lòng xoá hoặc chỉnh sửa nhóm hiện tại." });
+
+            var hasSubmissions = await _db.Submissions.AnyAsync(s => s.AssignmentId == assignmentId, ct);
+            if (hasSubmissions)
+                return BadRequest(new { message = "Đã có bài nộp nên không thể chia nhóm ngẫu nhiên." });
+
+            var studentIds = await _db.Enrollments
+                .Where(e => e.ClassroomId == memberInfo.Value.assignment.ClassroomId && e.Role == "Student")
+                .Select(e => e.UserId)
+                .ToListAsync(ct);
+
+            if (studentIds.Count == 0)
+                return BadRequest(new { message = "Không có học viên để chia nhóm." });
+
+            var maxSize = memberInfo.Value.assignment.GroupMaxMembers ?? memberInfo.Value.assignment.GroupMinMembers ?? 2;
+            var minSize = memberInfo.Value.assignment.GroupMinMembers ?? 1;
+            if (maxSize <= 0) maxSize = 1;
+            if (minSize <= 0) minSize = 1;
+            if (maxSize < minSize) maxSize = minSize;
+
+            var rnd = new Random();
+            for (var i = studentIds.Count - 1; i > 0; i--)
+            {
+                var j = rnd.Next(i + 1);
+                (studentIds[i], studentIds[j]) = (studentIds[j], studentIds[i]);
+            }
+
+            var groups = new List<List<Guid>>();
+            for (var i = 0; i < studentIds.Count; i += maxSize)
+            {
+                groups.Add(studentIds.Skip(i).Take(maxSize).ToList());
+            }
+
+            if (groups.Count > 1)
+            {
+                var last = groups.Last();
+                while (last.Count < minSize)
+                {
+                    var donor = groups.Take(groups.Count - 1).FirstOrDefault(g => g.Count > minSize);
+                    if (donor == null) break;
+                    var moved = donor[^1];
+                    donor.RemoveAt(donor.Count - 1);
+                    last.Add(moved);
+                }
+            }
+
+            var now = DateTime.UtcNow;
+            var index = 1;
+            foreach (var groupMembers in groups)
+            {
+                if (groupMembers.Count == 0) continue;
+                var leaderId = groupMembers[0];
+                var group = new AssignmentGroup
+                {
+                    AssignmentId = assignmentId,
+                    Name = $"Nhóm {index}",
+                    LeaderId = leaderId,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+                foreach (var memberId in groupMembers)
+                {
+                    group.Members.Add(new AssignmentGroupMember
+                    {
+                        AssignmentId = assignmentId,
+                        GroupId = group.Id,
+                        UserId = memberId,
+                        Role = memberId == leaderId ? "Leader" : "Member",
+                        CanSubmit = memberId == leaderId,
+                        JoinedAt = now
+                    });
+                }
+                _db.AssignmentGroups.Add(group);
+                index++;
+            }
+
+            await _db.SaveChangesAsync(ct);
+
+            var created = await _db.AssignmentGroups
+                .Include(g => g.Members).ThenInclude(m => m.User)
+                .Where(g => g.AssignmentId == assignmentId)
+                .OrderBy(g => g.CreatedAt)
+                .ToListAsync(ct);
+
+            return Ok(new { message = "Đã chia nhóm ngẫu nhiên.", groups = created.Select(MapGroup) });
         }
     }
 }

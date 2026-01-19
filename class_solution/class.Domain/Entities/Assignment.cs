@@ -22,6 +22,7 @@ namespace class_api.Domain
         public bool GroupEnabled { get; set; } = false;
         public int? GroupMinMembers { get; set; }
         public int? GroupMaxMembers { get; set; }
+        public string? GroupMode { get; set; } = "student";
 
         public Guid CreatedBy { get; set; }
         public User? Creator { get; set; }
