@@ -119,9 +119,9 @@ namespace class_api.Controllers
                 group = groupInfo.Value.group;
                 var member = groupInfo.Value.member;
                 var members = groupInfo.Value.members;
-                var canSubmit = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) || member.CanSubmit;
-                if (!canSubmit)
-                    return BadRequest(new { message = "Bạn không có quyền nộp bài cho nhóm." });
+                var isLeader = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase);
+                if (!isLeader)
+                    return BadRequest(new { message = "Chỉ trưởng nhóm mới có thể nộp bài." });
 
                 if (assignment.GroupMinMembers.HasValue && members.Count < assignment.GroupMinMembers.Value)
                 {
@@ -240,9 +240,9 @@ namespace class_api.Controllers
                 group = groupInfo.Value.group;
                 var member = groupInfo.Value.member;
                 var members = groupInfo.Value.members;
-                var canSubmit = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) || member.CanSubmit;
-                if (!canSubmit)
-                    return BadRequest(new { message = "Bạn không có quyền nộp bài cho nhóm." });
+                var isLeader = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase);
+                if (!isLeader)
+                    return BadRequest(new { message = "Chỉ trưởng nhóm mới có thể nộp bài." });
 
                 if (assignment.GroupMinMembers.HasValue && members.Count < assignment.GroupMinMembers.Value)
                 {
@@ -565,8 +565,8 @@ namespace class_api.Controllers
                     .FirstOrDefaultAsync(m => m.AssignmentId == submission.AssignmentId && m.UserId == uid, ct);
                 if (member == null || member.GroupId != submission.GroupId)
                     return Forbid();
-                var canSubmit = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) || member.CanSubmit;
-                if (!canSubmit)
+                var isLeader = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase);
+                if (!isLeader)
                     return Forbid();
             }
             else
@@ -637,8 +637,8 @@ namespace class_api.Controllers
                     .FirstOrDefaultAsync(m => m.AssignmentId == assignmentId && m.UserId == uid, ct);
                 if (member == null)
                     return BadRequest(new { message = "Bạn chưa có nhóm cho bài tập này." });
-                var canSubmit = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) || member.CanSubmit;
-                if (!canSubmit)
+                var isLeader = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase);
+                if (!isLeader)
                     return Forbid();
                 groupId = member.GroupId;
             }

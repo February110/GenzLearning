@@ -132,6 +132,10 @@ namespace class_api.Controllers
             };
             _db.Assignments.Add(a);
             await _db.SaveChangesAsync();
+            if (a.GroupEnabled)
+            {
+                await CreateGroupsFromClassroom(a.Id, a.ClassroomId);
+            }
 
             await _hub.Clients.Group(a.ClassroomId.ToString()).SendAsync("AssignmentCreated", new
             {
@@ -224,6 +228,10 @@ namespace class_api.Controllers
             };
             _db.Assignments.Add(a);
             await _db.SaveChangesAsync(ct);
+            if (a.GroupEnabled)
+            {
+                await CreateGroupsFromClassroom(a.Id, a.ClassroomId, ct);
+            }
 
             var cls = member.Classroom ?? await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == ClassroomId, ct);
             var prefix = BuildAssignmentTimestampPrefix(a, cls ?? new Classroom { Id = ClassroomId, Name = "untitled" });
@@ -517,6 +525,49 @@ namespace class_api.Controllers
                 }
                 catch { }
             }
+        }
+
+        private async Task CreateGroupsFromClassroom(Guid assignmentId, Guid classroomId, CancellationToken ct = default)
+        {
+            var classGroups = await _db.ClassroomGroups
+                .Include(g => g.Members)
+                .Where(g => g.ClassroomId == classroomId)
+                .ToListAsync(ct);
+
+            if (classGroups.Count == 0) return;
+
+            var now = DateTime.UtcNow;
+            foreach (var cg in classGroups)
+            {
+                if (cg.Members.Count == 0) continue;
+                var leaderId = cg.LeaderId;
+                var group = new AssignmentGroup
+                {
+                    AssignmentId = assignmentId,
+                    Name = cg.Name,
+                    LeaderId = leaderId,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+
+                foreach (var member in cg.Members)
+                {
+                    var isLeader = member.UserId == leaderId;
+                    group.Members.Add(new AssignmentGroupMember
+                    {
+                        AssignmentId = assignmentId,
+                        GroupId = group.Id,
+                        UserId = member.UserId,
+                        Role = isLeader ? "Leader" : "Member",
+                        CanSubmit = isLeader,
+                        JoinedAt = now
+                    });
+                }
+
+                _db.AssignmentGroups.Add(group);
+            }
+
+            await _db.SaveChangesAsync(ct);
         }
     }
 }

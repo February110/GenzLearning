@@ -241,7 +241,7 @@ export default function AssignmentDetailPage() {
     return Array.isArray(raw) ? raw : [];
   }, [myGroupData]);
   const myIsLeader = !!(myMemberInfo && String(myMemberInfo.role || myMemberInfo.Role || "") === "Leader");
-  const myCanSubmit = myIsLeader || !!(myMemberInfo?.canSubmit ?? myMemberInfo?.CanSubmit);
+  const myCanSubmit = myIsLeader;
   const groupMinMembers = assignment?.groupMinMembers ?? assignment?.GroupMinMembers ?? null;
   const groupMaxMembers = assignment?.groupMaxMembers ?? assignment?.GroupMaxMembers ?? null;
   const groupMemberCount = myGroupMembers.length;
@@ -1037,7 +1037,7 @@ export default function AssignmentDetailPage() {
                       <div className="text-xs text-gray-500">Thành viên: {groupMemberCount}</div>
                     </div>
                     <span className={`text-xs rounded-full px-2 py-1 ${myCanSubmit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-                      {myCanSubmit ? "Có quyền nộp" : "Chưa có quyền nộp"}
+                      {myCanSubmit ? "Trưởng nhóm nộp bài" : "Thành viên"}
                     </span>
                   </div>
                   {!groupMeetsMin && (
@@ -1047,7 +1047,6 @@ export default function AssignmentDetailPage() {
                     {myGroupMembers.map((m: any) => {
                       const role = (m.role || m.Role || "").toLowerCase();
                       const isLeader = role === "leader";
-                      const canSubmit = isLeader || !!(m.canSubmit ?? m.CanSubmit);
                       return (
                         <div key={m.userId || m.UserId} className="flex items-center justify-between rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2 text-xs">
                           <div className="min-w-0">
@@ -1059,23 +1058,7 @@ export default function AssignmentDetailPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {myIsLeader && !isLeader && (
-                              <label className="flex items-center gap-1 text-[11px] text-gray-600">
-                                <input
-                                  type="checkbox"
-                                  checked={canSubmit}
-                                  onChange={(e) =>
-                                    toggleMemberSubmit(
-                                      myGroupData.id || myGroupData.Id,
-                                      (m.userId || m.UserId || "").toString(),
-                                      e.target.checked
-                                    )
-                                  }
-                                />
-                                Nộp bài
-                              </label>
-                            )}
-                            {myIsLeader && !isLeader && (
+                            {myIsLeader && !isLeader && groupMode !== "random" && (
                               <button
                                 type="button"
                                 className="text-rose-600 hover:underline"
@@ -1095,7 +1078,7 @@ export default function AssignmentDetailPage() {
                       );
                     })}
                   </div>
-                  {myIsLeader && (
+                  {myIsLeader && groupMode !== "random" && (
                     <div className="space-y-2">
                       <div className="text-xs text-gray-500">Thêm thành viên</div>
                       <div className="grid sm:grid-cols-2 gap-2 max-h-32 overflow-auto pr-1">
@@ -1167,9 +1150,7 @@ export default function AssignmentDetailPage() {
               </button>
             </div>
             {groupEnabled && !canSubmitNow && (
-              <div className="text-xs text-rose-600">
-                Chỉ trưởng nhóm hoặc thành viên được phân quyền mới có thể nộp bài.
-              </div>
+              <div className="text-xs text-rose-600">Chỉ trưởng nhóm mới có thể nộp bài.</div>
             )}
             {(allowedTokens.length > 0 || maxFileSizeBytes) && (
               <div className="text-xs text-gray-500 dark:text-gray-400">

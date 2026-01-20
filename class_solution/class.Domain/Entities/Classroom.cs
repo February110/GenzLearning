@@ -27,5 +27,6 @@ namespace class_api.Domain
 
         public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
         public ICollection<Assignment> Assignments { get; set; } = new List<Assignment>();
+        public ICollection<ClassroomGroup> Groups { get; set; } = new List<ClassroomGroup>();
     }
 }

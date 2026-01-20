@@ -214,81 +214,42 @@ export default function AssignmentCreateModal({
                 <div className="text-xs text-gray-400 mt-1">Để trống nếu không giới hạn.</div>
               </div>
             </div>
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950 p-3 space-y-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-                <input
-                  disabled={creating}
-                  type="checkbox"
-                  checked={form.groupEnabled}
-                  onChange={(e) => setForm({ ...form, groupEnabled: e.target.checked })}
-                />
-                Nộp theo nhóm
-              </label>
-              {form.groupEnabled && (
-                <>
-                  <div className="space-y-2">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Hình thức tạo nhóm</div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="groupMode"
-                          value="student"
-                          checked={form.groupMode !== "random"}
-                          onChange={() => setForm({ ...form, groupMode: "student" })}
-                        />
-                        Học viên tự ghép nhóm
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="groupMode"
-                          value="random"
-                          checked={form.groupMode === "random"}
-                          onChange={() => setForm({ ...form, groupMode: "random" })}
-                        />
-                        Giáo viên chia nhóm ngẫu nhiên
-                      </label>
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Hệ thống hỗ trợ hai hình thức tạo nhóm cho bài tập: học viên tự ghép nhóm và giáo viên tạo nhóm
-                      ngẫu nhiên. Giáo viên có thể lựa chọn hình thức phù hợp khi tạo bài tập nhằm đảm bảo tính linh
-                      hoạt và hiệu quả trong tổ chức học tập theo nhóm.
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400">Số thành viên tối thiểu</label>
-                      <input
-                        disabled={creating}
-                        type="number"
-                        min={1}
-                        placeholder="Ví dụ: 2"
-                        className="w-full rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm disabled:opacity-60"
-                        value={form.groupMinMembers}
-                        onChange={(e) =>
-                          setForm({ ...form, groupMinMembers: e.target.value === "" ? "" : Number(e.target.value) })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400">Số thành viên tối đa</label>
-                      <input
-                        disabled={creating}
-                        type="number"
-                        min={1}
-                        placeholder="Không bắt buộc"
-                        className="w-full rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm disabled:opacity-60"
-                        value={form.groupMaxMembers}
-                        onChange={(e) =>
-                          setForm({ ...form, groupMaxMembers: e.target.value === "" ? "" : Number(e.target.value) })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-400">Mỗi học viên chỉ thuộc một nhóm cho bài tập này.</div>
-                </>
-              )}
+            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-950 p-3 space-y-2">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-200">Hình thức bài tập</div>
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    disabled={creating}
+                    type="radio"
+                    name="assignmentType"
+                    checked={!form.groupEnabled}
+                    onChange={() =>
+                      setForm({
+                        ...form,
+                        groupEnabled: false,
+                      })
+                    }
+                  />
+                  Bài tập cá nhân
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    disabled={creating}
+                    type="radio"
+                    name="assignmentType"
+                    checked={form.groupEnabled}
+                    onChange={() =>
+                      setForm({
+                        ...form,
+                        groupEnabled: true,
+                        groupMode: "random",
+                        groupMinMembers: form.groupMinMembers === "" ? 2 : form.groupMinMembers,
+                      })
+                    }
+                  />
+                  Bài tập theo nhóm
+                </label>
+              </div>
             </div>
             <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-white dark:bg-zinc-950 p-3 space-y-3 shadow-sm">
               <div className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">Sinh câu hỏi trắc nghiệm (AI)</div>
