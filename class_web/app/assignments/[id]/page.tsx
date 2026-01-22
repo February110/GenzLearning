@@ -46,8 +46,8 @@ export default function AssignmentDetailPage() {
   const [groups, setGroups] = useState<any[]>([]);
   const [myGroup, setMyGroup] = useState<any>(null);
   const [groupName, setGroupName] = useState("");
-  const [newMemberIds, setNewMemberIds] = useState<string[]>([]);
-  const [addMemberIds, setAddMemberIds] = useState<string[]>([]);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [nextLeaderId, setNextLeaderId] = useState("");
   const [groupBusy, setGroupBusy] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const dueTs = useMemo(() => {
@@ -240,6 +240,10 @@ export default function AssignmentDetailPage() {
     const raw = myGroupData?.members ?? myGroupData?.Members ?? [];
     return Array.isArray(raw) ? raw : [];
   }, [myGroupData]);
+  const myGroupId = useMemo(() => {
+    const raw = myGroupData?.id ?? myGroupData?.Id ?? "";
+    return raw ? String(raw) : "";
+  }, [myGroupData]);
   const myIsLeader = !!(myMemberInfo && String(myMemberInfo.role || myMemberInfo.Role || "") === "Leader");
   const myCanSubmit = myIsLeader;
   const groupMinMembers = assignment?.groupMinMembers ?? assignment?.GroupMinMembers ?? null;
@@ -247,26 +251,29 @@ export default function AssignmentDetailPage() {
   const groupMemberCount = myGroupMembers.length;
   const groupMeetsMin = !groupMinMembers || groupMemberCount >= groupMinMembers;
   const canSubmitNow = !groupEnabled || (!!myGroupData && myCanSubmit && groupMeetsMin);
-  const assignedMemberIds = useMemo(() => {
-    const set = new Set<string>();
-    (groups || []).forEach((g: any) => {
-      const members = g.members ?? g.Members ?? [];
-      members.forEach((m: any) => {
-        const id = (m.userId ?? m.UserId ?? "").toString();
-        if (id) set.add(id);
-      });
-    });
-    return set;
-  }, [groups]);
-  const availableStudents = useMemo(() => {
-    const meId = String(user?.id ?? user?.userId ?? user?.Id ?? "");
-    return (students || []).filter((s: any) => {
-      const uid = (s.userId || "").toString();
-      if (!uid) return false;
-      if (assignedMemberIds.has(uid)) return false;
-      return uid !== meId;
-    });
-  }, [students, assignedMemberIds, user]);
+  const groupLocked = useMemo(() => {
+    return !!(dueTs && Date.now() > dueTs);
+  }, [dueTs]);
+  const myGroupHasSubmission = useMemo(() => {
+    if (!myGroupId) return false;
+    return (mySubs || []).some((s: any) => String(s.groupId ?? s.GroupId ?? "") === myGroupId);
+  }, [mySubs, myGroupId]);
+  const canEditGroup = useMemo(() => {
+    return groupMode === "student" && !groupLocked && !myGroupHasSubmission;
+  }, [groupMode, groupLocked, myGroupHasSubmission]);
+  const currentGroupName = useMemo(() => {
+    return (myGroupData?.name ?? myGroupData?.Name ?? "").toString();
+  }, [myGroupData]);
+  const groupNameChanged = useMemo(() => {
+    const trimmed = editGroupName.trim();
+    return trimmed.length > 0 && trimmed !== currentGroupName.trim();
+  }, [editGroupName, currentGroupName]);
+
+  useEffect(() => {
+    const name = (myGroupData?.name ?? myGroupData?.Name ?? "").toString();
+    setEditGroupName(name);
+    setNextLeaderId("");
+  }, [myGroupId]);
 
   useEffect(() => { if (id) load(); }, [id]);
   useEffect(() => {
@@ -406,11 +413,9 @@ export default function AssignmentDetailPage() {
       setGroupBusy(true);
       await api.post(`/assignments/${id}/groups`, {
         name: groupName.trim(),
-        memberIds: newMemberIds.map((x) => x.trim()).filter(Boolean),
       });
       toast.success("Đã tạo nhóm");
       setGroupName("");
-      setNewMemberIds([]);
       await Promise.all([loadGroups(true), loadMyGroup(true)]);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Tạo nhóm thất bại");
@@ -419,21 +424,65 @@ export default function AssignmentDetailPage() {
     }
   }
 
-  async function addMembers(groupId: string) {
-    if (!addMemberIds.length) {
-      toast.error("Chưa chọn thành viên");
+  async function joinGroup(groupId: string) {
+    try {
+      setGroupBusy(true);
+      await api.post(`/assignments/${id}/groups/${groupId}/join`);
+      toast.success("Đã tham gia nhóm");
+      await Promise.all([loadGroups(true), loadMyGroup(true)]);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Tham gia nhóm thất bại");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
+  async function leaveGroup(groupId: string) {
+    try {
+      setGroupBusy(true);
+      await api.post(`/assignments/${id}/groups/${groupId}/leave`);
+      toast.success("Đã rời nhóm");
+      await Promise.all([loadGroups(true), loadMyGroup(true)]);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Rời nhóm thất bại");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
+  async function updateGroupName(groupId: string) {
+    if (!editGroupName.trim()) {
+      toast.error("Vui lòng nhập tên nhóm");
       return;
     }
     try {
       setGroupBusy(true);
-      await api.post(`/assignments/${id}/groups/${groupId}/members`, {
-        memberIds: addMemberIds.map((x) => x.trim()).filter(Boolean),
+      await api.patch(`/assignments/${id}/groups/${groupId}`, {
+        name: editGroupName.trim(),
       });
-      toast.success("Đã thêm thành viên");
-      setAddMemberIds([]);
+      toast.success("Đã cập nhật nhóm");
       await Promise.all([loadGroups(true), loadMyGroup(true)]);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Thêm thành viên thất bại");
+      toast.error(err?.response?.data?.message || "Cập nhật nhóm thất bại");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
+  async function transferLeader(groupId: string) {
+    if (!nextLeaderId) {
+      toast.error("Vui lòng chọn trưởng nhóm mới");
+      return;
+    }
+    try {
+      setGroupBusy(true);
+      await api.patch(`/assignments/${id}/groups/${groupId}`, {
+        leaderId: nextLeaderId,
+      });
+      toast.success("Đã chuyển trưởng nhóm");
+      await Promise.all([loadGroups(true), loadMyGroup(true)]);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Chuyển trưởng nhóm thất bại");
     } finally {
       setGroupBusy(false);
     }
@@ -452,17 +501,6 @@ export default function AssignmentDetailPage() {
     }
   }
 
-  async function toggleMemberSubmit(groupId: string, userId: string, canSubmit: boolean) {
-    try {
-      setGroupBusy(true);
-      await api.patch(`/assignments/${id}/groups/${groupId}/members/${userId}`, { canSubmit });
-      await Promise.all([loadGroups(true), loadMyGroup(true)]);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Cập nhật quyền nộp thất bại");
-    } finally {
-      setGroupBusy(false);
-    }
-  }
 
   async function handleDeleteSubmission(subId?: string){
     try{
@@ -983,65 +1021,139 @@ export default function AssignmentDetailPage() {
                     Giáo viên sẽ chia nhóm ngẫu nhiên cho bài tập này. Vui lòng chờ thông báo.
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="text-sm text-gray-600">Bạn chưa có nhóm cho bài tập này.</div>
-                    <div className="grid gap-3">
+                    {groupLocked && (
+                      <div className="text-xs text-rose-600">Đã quá thời điểm chốt nhóm.</div>
+                    )}
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
                       <input
                         value={groupName}
                         onChange={(e) => setGroupName(e.target.value)}
                         placeholder="Tên nhóm"
-                        className="w-full rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 py-2 text-sm"
+                        disabled={groupBusy || groupLocked}
+                        className="w-full rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 py-2 text-sm disabled:opacity-60"
                       />
-                      <div>
-                        <div className="text-xs text-gray-500 mb-2">Chọn thành viên (không bắt buộc)</div>
-                        <div className="grid sm:grid-cols-2 gap-2 max-h-40 overflow-auto pr-1">
-                          {availableStudents.length === 0 && (
-                            <div className="text-xs text-gray-500">Không còn học viên để thêm.</div>
-                          )}
-                          {availableStudents.map((s: any) => {
-                            const uid = (s.userId || "").toString();
-                            const checked = newMemberIds.includes(uid);
-                            return (
-                              <label key={uid} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    setNewMemberIds((prev) =>
-                                      e.target.checked ? [...prev, uid] : prev.filter((x) => x !== uid)
-                                    );
-                                  }}
-                                />
-                                <span className="truncate">{s.name || s.email}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
                       <button
                         type="button"
-                        disabled={groupBusy || !groupName.trim()}
+                        disabled={groupBusy || groupLocked || !groupName.trim()}
                         onClick={createGroup}
-                        className="self-start rounded-full bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-60"
+                        className="rounded-full bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-60"
                       >
                         Tạo nhóm
                       </button>
                     </div>
+                    <div className="space-y-2">
+                      <div className="text-xs text-gray-500">Nhóm hiện có</div>
+                      {groups.length === 0 ? (
+                        <div className="text-xs text-gray-500">Chưa có nhóm nào.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {groups.map((g: any) => {
+                            const gid = String(g.id ?? g.Id ?? "");
+                            const members = g.members ?? g.Members ?? [];
+                            const count = Array.isArray(members) ? members.length : 0;
+                            const max = groupMaxMembers;
+                            const min = groupMinMembers;
+                            const isFull = !!(max && count >= max);
+                            const statusLabel = max
+                              ? isFull
+                                ? "Đã đủ"
+                                : "Chưa đủ"
+                              : min
+                              ? count >= min
+                                ? "Đã đủ"
+                                : "Chưa đủ"
+                              : "";
+                            const statusClass = isFull ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700";
+                            const leaderName = g.leaderName ?? g.LeaderName;
+                            return (
+                              <div
+                                key={gid || count}
+                                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2"
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                    {g.name ?? g.Name ?? "Nhóm"}
+                                  </div>
+                                  <div className="text-xs text-gray-500 truncate">
+                                    {leaderName ? `Trưởng nhóm: ${leaderName}` : `${count} thành viên`}
+                                    {max ? ` • ${count}/${max}` : ""}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {statusLabel && (
+                                    <span className={`text-[11px] rounded-full px-2 py-0.5 ${statusClass}`}>
+                                      {statusLabel}
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={groupBusy || groupLocked || !gid || isFull}
+                                    onClick={() => joinGroup(gid)}
+                                    className="rounded-full border px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-zinc-800 disabled:opacity-60"
+                                  >
+                                    Tham gia
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <div className="text-sm font-semibold text-gray-900 dark:text-white">{myGroupData.name || myGroupData.Name || "Nhóm"}</div>
-                      <div className="text-xs text-gray-500">Thành viên: {groupMemberCount}</div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {myGroupData.name || myGroupData.Name || "Nhóm"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Thành viên: {groupMemberCount}
+                        {groupMaxMembers ? `/${groupMaxMembers}` : ""}
+                      </div>
                     </div>
-                    <span className={`text-xs rounded-full px-2 py-1 ${myCanSubmit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-                      {myCanSubmit ? "Trưởng nhóm nộp bài" : "Thành viên"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {(groupMinMembers || groupMaxMembers) && (
+                        <span
+                          className={`text-[11px] rounded-full px-2 py-0.5 ${
+                            groupMaxMembers && groupMemberCount >= groupMaxMembers
+                              ? "bg-emerald-50 text-emerald-700"
+                              : groupMinMembers && groupMemberCount >= groupMinMembers
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          {groupMaxMembers
+                            ? groupMemberCount >= groupMaxMembers
+                              ? "Đã đủ"
+                              : "Chưa đủ"
+                            : groupMinMembers
+                            ? groupMemberCount >= groupMinMembers
+                              ? "Đã đủ"
+                              : "Chưa đủ"
+                            : ""}
+                        </span>
+                      )}
+                      <span className={`text-xs rounded-full px-2 py-1 ${myCanSubmit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
+                        {myCanSubmit ? "Trưởng nhóm nộp bài" : "Thành viên"}
+                      </span>
+                    </div>
                   </div>
                   {!groupMeetsMin && (
                     <div className="text-xs text-rose-600">Nhóm chưa đủ số lượng thành viên theo yêu cầu.</div>
+                  )}
+                  {groupMode !== "student" && (
+                    <div className="text-xs text-gray-500">Nhóm được giáo viên chia, không thể chỉnh sửa.</div>
+                  )}
+                  {groupLocked && (
+                    <div className="text-xs text-rose-600">Đã quá thời điểm chốt nhóm.</div>
+                  )}
+                  {myGroupHasSubmission && (
+                    <div className="text-xs text-rose-600">Nhóm đã nộp bài nên không thể thay đổi.</div>
                   )}
                   <div className="space-y-2">
                     {myGroupMembers.map((m: any) => {
@@ -1058,10 +1170,11 @@ export default function AssignmentDetailPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {myIsLeader && !isLeader && groupMode !== "random" && (
+                            {myIsLeader && !isLeader && canEditGroup && (
                               <button
                                 type="button"
-                                className="text-rose-600 hover:underline"
+                                className="text-rose-600 hover:underline disabled:opacity-60"
+                                disabled={groupBusy}
                                 onClick={() =>
                                   removeMember(
                                     myGroupData.id || myGroupData.Id,
@@ -1078,40 +1191,82 @@ export default function AssignmentDetailPage() {
                       );
                     })}
                   </div>
-                  {myIsLeader && groupMode !== "random" && (
-                    <div className="space-y-2">
-                      <div className="text-xs text-gray-500">Thêm thành viên</div>
-                      <div className="grid sm:grid-cols-2 gap-2 max-h-32 overflow-auto pr-1">
-                        {availableStudents.length === 0 && (
-                          <div className="text-xs text-gray-500">Không còn học viên để thêm.</div>
-                        )}
-                        {availableStudents.map((s: any) => {
-                          const uid = (s.userId || "").toString();
-                          const checked = addMemberIds.includes(uid);
-                          return (
-                            <label key={uid} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => {
-                                  setAddMemberIds((prev) =>
-                                    e.target.checked ? [...prev, uid] : prev.filter((x) => x !== uid)
-                                  );
-                                }}
-                              />
-                              <span className="truncate">{s.name || s.email}</span>
-                            </label>
-                          );
-                        })}
+                  {myIsLeader && groupMode === "student" && (
+                    <div className="grid gap-3">
+                      <div className="grid gap-2">
+                        <div className="text-xs text-gray-500">Đổi tên nhóm</div>
+                        <div className="flex flex-wrap gap-2">
+                          <input
+                            value={editGroupName}
+                            onChange={(e) => setEditGroupName(e.target.value)}
+                            disabled={!canEditGroup || groupBusy}
+                            placeholder="Tên nhóm"
+                            className="w-full sm:w-auto flex-1 rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 py-2 text-xs disabled:opacity-60"
+                          />
+                          <button
+                            type="button"
+                            disabled={!canEditGroup || groupBusy || !groupNameChanged}
+                            onClick={() => updateGroupName((myGroupData.id || myGroupData.Id) as string)}
+                            className="rounded-full border border-indigo-200 text-indigo-700 px-4 py-2 text-xs hover:bg-indigo-50 disabled:opacity-60"
+                          >
+                            Lưu
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        disabled={groupBusy || addMemberIds.length === 0}
-                        onClick={() => addMembers((myGroupData.id || myGroupData.Id) as string)}
-                        className="rounded-full border border-indigo-200 text-indigo-700 px-4 py-2 text-xs hover:bg-indigo-50 disabled:opacity-60"
-                      >
-                        Thêm thành viên
-                      </button>
+                      {myGroupMembers.length > 1 && (
+                        <div className="grid gap-2">
+                          <div className="text-xs text-gray-500">Chuyển trưởng nhóm</div>
+                          <div className="flex flex-wrap gap-2">
+                            <select
+                              value={nextLeaderId}
+                              disabled={!canEditGroup || groupBusy}
+                              onChange={(e) => setNextLeaderId(e.target.value)}
+                              className="w-full sm:w-auto flex-1 rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 py-2 text-xs disabled:opacity-60"
+                            >
+                              <option value="">Chọn thành viên</option>
+                              {myGroupMembers
+                                .filter((m: any) => String(m.userId || m.UserId || "") !== String(myGroupData?.leaderId || myGroupData?.LeaderId || ""))
+                                .map((m: any) => (
+                                  <option key={m.userId || m.UserId} value={m.userId || m.UserId}>
+                                    {m.fullName || m.FullName || m.name || m.email}
+                                  </option>
+                                ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={!canEditGroup || groupBusy || !nextLeaderId}
+                              onClick={() => transferLeader((myGroupData.id || myGroupData.Id) as string)}
+                              className="rounded-full border border-indigo-200 text-indigo-700 px-4 py-2 text-xs hover:bg-indigo-50 disabled:opacity-60"
+                            >
+                              Chuyển
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {groupMode === "student" && (
+                    <div className="flex flex-wrap gap-2">
+                      {!myIsLeader && (
+                        <button
+                          type="button"
+                          disabled={!canEditGroup || groupBusy}
+                          onClick={() => leaveGroup((myGroupData.id || myGroupData.Id) as string)}
+                          className="rounded-full border px-4 py-2 text-xs hover:bg-gray-50 dark:hover:bg-zinc-800 disabled:opacity-60"
+                        >
+                          Rời nhóm
+                        </button>
+                      )}
+                      {myIsLeader && (
+                        <button
+                          type="button"
+                          disabled={!canEditGroup || groupBusy || groupMemberCount > 1}
+                          onClick={() => leaveGroup((myGroupData.id || myGroupData.Id) as string)}
+                          className="rounded-full border px-4 py-2 text-xs hover:bg-gray-50 dark:hover:bg-zinc-800 disabled:opacity-60"
+                        >
+                          {groupMemberCount > 1 ? "Chuyển trưởng nhóm để rời" : "Giải tán nhóm"}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

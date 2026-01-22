@@ -13,6 +13,7 @@ import ClassroomHero from "@/components/classrooms/detail/ClassroomHero";
 import ClassroomSettingsSheet from "@/components/classrooms/detail/ClassroomSettingsSheet";
 import AssignmentsCard from "@/components/classrooms/detail/AssignmentsCard";
 import MembersCard from "@/components/classrooms/detail/MembersCard";
+import ClassroomGroupsCard from "@/components/classrooms/detail/ClassroomGroupsCard";
 import AssignmentCreateModal from "@/components/classrooms/detail/AssignmentCreateModal";
 import AssignmentEditModal from "@/components/classrooms/detail/AssignmentEditModal";
 import ClassroomTabMenu, { type TabItem } from "@/components/classrooms/detail/ClassroomTabMenu";
@@ -26,6 +27,7 @@ export default function ClassroomDetailPage() {
 
   const [classroom, setClassroom] = useState<any>(null);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState("");
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showAnnounce, setShowAnnounce] = useState(false);
@@ -348,10 +350,12 @@ export default function ClassroomDetailPage() {
     try {
       const me = await api.get("/auth/me").catch(() => null);
       const myId = (me?.data?.id || "").toString().toLowerCase();
+      setCurrentUserId(myId);
       const { data } = await api.get(`/classrooms/${classroomId}`);
       const normalized = {
         ...data,
         inviteCodeVisible: data.inviteCodeVisible ?? data.InviteCodeVisible ?? true,
+        classGroupMode: data.classGroupMode ?? data.ClassGroupMode ?? null,
       };
       setClassroom(normalized);
       try {
@@ -488,6 +492,7 @@ export default function ClassroomDetailPage() {
       { id: "assignments", label: "Bài tập trên lớp" },
       { id: "meetings", label: "Cuộc họp" },
       { id: "members", label: "Mọi người" },
+      { id: "groups", label: "Nhóm" },
     ];
     if (isTeacher) {
       items.push({ id: "grades", label: "Điểm", indicator: true });
@@ -690,6 +695,9 @@ export default function ClassroomDetailPage() {
   const computedBanner = bannerList[sum % bannerList.length];
   const bannerUrl = bannerFromServer || computedBanner;
   const inviteVisible = classroom.inviteCodeVisible ?? classroom.InviteCodeVisible ?? true;
+  const classGroupModeRaw = (classroom?.classGroupMode ?? classroom?.ClassGroupMode ?? "").toString().toLowerCase();
+  const classGroupMode =
+    classGroupModeRaw === "random" ? "random" : classGroupModeRaw === "student" ? "student" : "none";
   const membersList = ((classroom?.Members ?? classroom?.members) as any[]) || [];
   const gradeMembers = membersList.filter((m: any) => (m.role ?? m.Role) !== "Teacher");
   return (
@@ -739,7 +747,16 @@ export default function ClassroomDetailPage() {
           />
         )}
         {activeTab === "members" && (
-          <MembersCard classroomId={String(classroomId)} members={membersList} isTeacher={isTeacher} />
+          <MembersCard members={membersList} />
+        )}
+        {activeTab === "groups" && (
+          <ClassroomGroupsCard
+            classroomId={String(classroomId)}
+            members={membersList}
+            isTeacher={isTeacher}
+            classGroupMode={classGroupMode}
+            currentUserId={currentUserId}
+          />
         )}
         {activeTab === "grades" && (
           <div className="max-w-full overflow-x-auto min-w-0">

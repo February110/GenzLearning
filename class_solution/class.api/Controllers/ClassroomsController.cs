@@ -149,6 +149,7 @@ namespace class_api.Controllers
                 c.Room,
                 c.Schedule,
                 c.InviteCodeVisible,
+                ClassGroupMode = c.ClassGroupMode,
                 Members = c.Enrollments.Select(e => new { e.UserId, e.User!.FullName, e.User!.Email, e.User!.Avatar, e.Role }),
                 Assignments = c.Assignments
                     .OrderByDescending(a => a.CreatedAt)
@@ -214,6 +215,21 @@ namespace class_api.Controllers
             await _db.SaveChangesAsync();
 
             return Ok(new { c.InviteCodeVisible });
+        }
+
+        [HttpPatch("{id:guid}/group-mode")]
+        public async Task<IActionResult> UpdateGroupMode(Guid id, UpdateClassGroupModeDto dto)
+        {
+            var c = await _db.Classrooms.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound();
+            if (c.TeacherId != _me.UserId) return Forbid();
+
+            var mode = string.Equals(dto.Mode, "random", StringComparison.OrdinalIgnoreCase) ? "random" : "student";
+            c.ClassGroupMode = mode;
+            c.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            return Ok(new { ClassGroupMode = c.ClassGroupMode });
         }
     }
 }

@@ -12,6 +12,9 @@ namespace class_api.Infrastructure.Configurations
             builder.Property(c => c.Name).HasMaxLength(200).IsRequired();
             builder.Property(c => c.InviteCode).HasMaxLength(50).IsRequired();
             builder.Property(c => c.BannerUrl).HasMaxLength(500);
+            builder.Property(c => c.ClassGroupMode)
+                .HasMaxLength(16)
+                .IsRequired(false);
             builder.Property(c => c.CreatedAt).IsRequired();
             builder.Property(c => c.UpdatedAt).IsRequired();
 

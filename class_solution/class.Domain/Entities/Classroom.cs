@@ -21,6 +21,8 @@ namespace class_api.Domain
         public string? Room { get; set; }
         public string? Schedule { get; set; }
 
+        public string? ClassGroupMode { get; set; }
+
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

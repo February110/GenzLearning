@@ -99,6 +99,11 @@ namespace class_api.Controllers
             return "student";
         }
 
+        private static string NormalizeClassGroupMode(string? mode)
+        {
+            return string.Equals(mode, "random", StringComparison.OrdinalIgnoreCase) ? "random" : "student";
+        }
+
         [HttpPost]
         [Consumes("application/json")]
         public async Task<IActionResult> Create(CreateAssignmentDto dto)
@@ -113,7 +118,7 @@ namespace class_api.Controllers
             var allowedTypes = FileTypeRules.NormalizeAllowedTypes(dto.AllowedFileTypes);
             var maxSizeBytes = ToBytes(dto.MaxFileSizeMb);
             var (minMembers, maxMembers) = NormalizeGroupSize(dto.GroupEnabled, dto.GroupMinMembers, dto.GroupMaxMembers);
-            var groupMode = NormalizeGroupMode(dto.GroupEnabled, dto.GroupMode);
+            var groupMode = dto.GroupEnabled ? NormalizeClassGroupMode(member.Classroom?.ClassGroupMode) : null;
 
             var a = new Assignment
             {
@@ -209,7 +214,7 @@ namespace class_api.Controllers
             var allowedTypes = FileTypeRules.NormalizeAllowedTypes(AllowedFileTypes);
             var maxSizeBytes = ToBytes(MaxFileSizeMb);
             var (minMembers2, maxMembers2) = NormalizeGroupSize(GroupEnabled, GroupMinMembers, GroupMaxMembers);
-            var groupMode2 = NormalizeGroupMode(GroupEnabled, GroupMode);
+            var groupMode2 = GroupEnabled ? NormalizeClassGroupMode(member.Classroom?.ClassGroupMode) : null;
 
             var a = new Assignment
             {
@@ -438,7 +443,7 @@ namespace class_api.Controllers
             a.AllowedFileTypes = FileTypeRules.NormalizeAllowedTypes(dto.AllowedFileTypes);
             a.MaxFileSizeBytes = ToBytes(dto.MaxFileSizeMb);
             var (minMembers3, maxMembers3) = NormalizeGroupSize(dto.GroupEnabled, dto.GroupMinMembers, dto.GroupMaxMembers);
-            var groupMode3 = NormalizeGroupMode(dto.GroupEnabled, dto.GroupMode);
+            var groupMode3 = dto.GroupEnabled ? NormalizeClassGroupMode(a.Classroom?.ClassGroupMode) : null;
             a.GroupEnabled = dto.GroupEnabled;
             a.GroupMinMembers = minMembers3;
             a.GroupMaxMembers = maxMembers3;

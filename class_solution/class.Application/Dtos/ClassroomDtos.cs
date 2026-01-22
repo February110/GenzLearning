@@ -11,4 +11,6 @@ namespace class_api.Application.Dtos
     public record JoinClassroomDto(string InviteCode);
 
     public record UpdateInviteCodeVisibilityDto(bool Visible);
+
+    public record UpdateClassGroupModeDto(string Mode);
 }

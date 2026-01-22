@@ -37,6 +37,28 @@ namespace class_api.Controllers
             return string.Equals(assignment.GroupMode, "random", StringComparison.OrdinalIgnoreCase) ? "random" : "student";
         }
 
+        private Task<bool> UserHasGroup(Guid assignmentId, Guid userId, CancellationToken ct)
+        {
+            return _db.AssignmentGroupMembers
+                .AnyAsync(m => m.AssignmentId == assignmentId && m.UserId == userId, ct);
+        }
+
+        private async Task<IActionResult?> EnsureStudentCanEditGroup(Assignment assignment, Guid? groupId, CancellationToken ct)
+        {
+            if (assignment.DueAt.HasValue && assignment.DueAt.Value <= DateTime.UtcNow)
+                return BadRequest(new { message = "Đã quá thời điểm chốt nhóm." });
+
+            if (groupId.HasValue)
+            {
+                var hasSubmission = await _db.Submissions
+                    .AnyAsync(s => s.AssignmentId == assignment.Id && s.GroupId == groupId.Value, ct);
+                if (hasSubmission)
+                    return BadRequest(new { message = "Nhóm đã nộp bài nên không thể thay đổi." });
+            }
+
+            return null;
+        }
+
         private static object MapGroup(AssignmentGroup group)
         {
             var leaderMember = group.Members.FirstOrDefault(m => m.UserId == group.LeaderId) ??
@@ -133,6 +155,16 @@ namespace class_api.Controllers
             if (mode == "random" && !isTeacher)
                 return Forbid();
 
+            if (!isTeacher)
+            {
+                if (!string.Equals(memberInfo.Value.member!.Role, "Student", StringComparison.OrdinalIgnoreCase))
+                    return Forbid();
+                if (await UserHasGroup(assignmentId, _me.UserId, ct))
+                    return Conflict(new { message = "Bạn đã có nhóm cho bài tập này." });
+                var guard = await EnsureStudentCanEditGroup(assignment, null, ct);
+                if (guard != null) return guard;
+            }
+
             var leaderId = isTeacher ? dto.LeaderId : _me.UserId;
             if (!leaderId.HasValue || leaderId.Value == Guid.Empty)
                 return BadRequest(new { message = "Thiếu trưởng nhóm." });
@@ -143,6 +175,10 @@ namespace class_api.Controllers
                 return BadRequest(new { message = "Trưởng nhóm phải là học viên trong lớp." });
 
             var memberIds = new HashSet<Guid>(dto.MemberIds ?? new List<Guid>());
+            if (!isTeacher)
+            {
+                memberIds.Clear();
+            }
             memberIds.Add(leaderId.Value);
 
             if (assignment.GroupMaxMembers.HasValue && memberIds.Count > assignment.GroupMaxMembers.Value)
@@ -200,6 +236,101 @@ namespace class_api.Controllers
             return CreatedAtAction(nameof(MyGroup), new { assignmentId }, new { Group = MapGroup(reloaded) });
         }
 
+        [HttpPost("{groupId:guid}/join")]
+        public async Task<IActionResult> Join(Guid assignmentId, Guid groupId, CancellationToken ct)
+        {
+            var memberInfo = await LoadMember(assignmentId, ct);
+            if (memberInfo == null) return NotFound();
+            if (memberInfo.Value.member == null) return Forbid();
+            if (!string.Equals(memberInfo.Value.member.Role, "Student", StringComparison.OrdinalIgnoreCase))
+                return Forbid();
+
+            if (!memberInfo.Value.assignment.GroupEnabled)
+                return BadRequest(new { message = "Bài tập này không bật nộp theo nhóm." });
+
+            var mode = ResolveGroupMode(memberInfo.Value.assignment);
+            if (mode != "student") return Forbid();
+
+            if (await UserHasGroup(assignmentId, _me.UserId, ct))
+                return Conflict(new { message = "Bạn đã có nhóm cho bài tập này." });
+
+            var group = await _db.AssignmentGroups
+                .Include(g => g.Members)
+                .FirstOrDefaultAsync(g => g.Id == groupId && g.AssignmentId == assignmentId, ct);
+            if (group == null) return NotFound(new { message = "Không tìm thấy nhóm." });
+
+            var guard = await EnsureStudentCanEditGroup(memberInfo.Value.assignment, groupId, ct);
+            if (guard != null) return guard;
+
+            var maxMembers = memberInfo.Value.assignment.GroupMaxMembers;
+            if (maxMembers.HasValue && group.Members.Count >= maxMembers.Value)
+                return BadRequest(new { message = "Nhóm đã đủ thành viên." });
+
+            if (group.Members.Any(m => m.UserId == _me.UserId))
+                return Conflict(new { message = "Bạn đã ở trong nhóm này." });
+
+            var now = DateTime.UtcNow;
+            group.Members.Add(new AssignmentGroupMember
+            {
+                AssignmentId = assignmentId,
+                GroupId = group.Id,
+                UserId = _me.UserId,
+                Role = "Member",
+                CanSubmit = false,
+                JoinedAt = now
+            });
+            group.UpdatedAt = now;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { message = "Đã tham gia nhóm." });
+        }
+
+        [HttpPost("{groupId:guid}/leave")]
+        public async Task<IActionResult> Leave(Guid assignmentId, Guid groupId, CancellationToken ct)
+        {
+            var memberInfo = await LoadMember(assignmentId, ct);
+            if (memberInfo == null) return NotFound();
+            if (memberInfo.Value.member == null) return Forbid();
+            if (!string.Equals(memberInfo.Value.member.Role, "Student", StringComparison.OrdinalIgnoreCase))
+                return Forbid();
+
+            if (!memberInfo.Value.assignment.GroupEnabled)
+                return BadRequest(new { message = "Bài tập này không bật nộp theo nhóm." });
+
+            var mode = ResolveGroupMode(memberInfo.Value.assignment);
+            if (mode != "student") return Forbid();
+
+            var group = await _db.AssignmentGroups
+                .Include(g => g.Members)
+                .FirstOrDefaultAsync(g => g.Id == groupId && g.AssignmentId == assignmentId, ct);
+            if (group == null) return NotFound(new { message = "Không tìm thấy nhóm." });
+
+            var guard = await EnsureStudentCanEditGroup(memberInfo.Value.assignment, groupId, ct);
+            if (guard != null) return guard;
+
+            var member = group.Members.FirstOrDefault(m => m.UserId == _me.UserId);
+            if (member == null) return NotFound(new { message = "Bạn chưa tham gia nhóm này." });
+
+            var isLeader = string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase);
+            if (isLeader && group.Members.Count > 1)
+                return BadRequest(new { message = "Trưởng nhóm cần chuyển quyền trước khi rời nhóm." });
+
+            _db.AssignmentGroupMembers.Remove(member);
+
+            if (group.Members.Count <= 1)
+            {
+                _db.AssignmentGroups.Remove(group);
+            }
+            else
+            {
+                group.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { message = "Đã rời nhóm." });
+        }
+
         [HttpPatch("{groupId:guid}")]
         public async Task<IActionResult> Update(Guid assignmentId, Guid groupId, [FromBody] UpdateAssignmentGroupDto dto, CancellationToken ct)
         {
@@ -220,15 +351,17 @@ namespace class_api.Controllers
             var mode = ResolveGroupMode(memberInfo.Value.assignment);
             if (!isTeacher && !isLeader) return Forbid();
             if (mode == "random" && !isTeacher) return Forbid();
+            if (!isTeacher)
+            {
+                var guard = await EnsureStudentCanEditGroup(memberInfo.Value.assignment, groupId, ct);
+                if (guard != null) return guard;
+            }
 
             if (!string.IsNullOrWhiteSpace(dto.Name))
                 group.Name = dto.Name.Trim();
 
             if (dto.LeaderId.HasValue && dto.LeaderId.Value != group.LeaderId)
             {
-                if (!isTeacher)
-                    return Forbid();
-
                 var newLeader = group.Members.FirstOrDefault(m => m.UserId == dto.LeaderId.Value);
                 if (newLeader == null)
                     return BadRequest(new { message = "Trưởng nhóm mới phải là thành viên trong nhóm." });
@@ -237,6 +370,7 @@ namespace class_api.Controllers
                 if (oldLeader != null)
                 {
                     oldLeader.Role = "Member";
+                    oldLeader.CanSubmit = false;
                 }
                 newLeader.Role = "Leader";
                 newLeader.CanSubmit = true;
@@ -267,10 +401,7 @@ namespace class_api.Controllers
             if (group == null) return NotFound(new { message = "Không tìm thấy nhóm." });
 
             var isTeacher = memberInfo.Value.isTeacher;
-            var isLeader = group.LeaderId == _me.UserId;
-            var mode = ResolveGroupMode(memberInfo.Value.assignment);
-            if (!isTeacher && !isLeader) return Forbid();
-            if (mode == "random" && !isTeacher) return Forbid();
+            if (!isTeacher) return Forbid();
 
             var memberIds = dto.MemberIds.Where(id => id != Guid.Empty).Distinct().ToList();
 
@@ -331,6 +462,11 @@ namespace class_api.Controllers
             var mode = ResolveGroupMode(memberInfo.Value.assignment);
             if (!isTeacher && !isLeader) return Forbid();
             if (mode == "random" && !isTeacher) return Forbid();
+            if (!isTeacher)
+            {
+                var guard = await EnsureStudentCanEditGroup(memberInfo.Value.assignment, groupId, ct);
+                if (guard != null) return guard;
+            }
 
             var member = group.Members.FirstOrDefault(m => m.UserId == userId);
             if (member == null) return NotFound(new { message = "Không tìm thấy thành viên." });
@@ -369,6 +505,11 @@ namespace class_api.Controllers
             var mode = ResolveGroupMode(memberInfo.Value.assignment);
             if (!isTeacher && !isLeader) return Forbid();
             if (mode == "random" && !isTeacher) return Forbid();
+            if (!isTeacher)
+            {
+                var guard = await EnsureStudentCanEditGroup(memberInfo.Value.assignment, groupId, ct);
+                if (guard != null) return guard;
+            }
 
             if (group.LeaderId == userId)
                 return BadRequest(new { message = "Không thể xoá trưởng nhóm. Hãy đổi trưởng nhóm trước." });
