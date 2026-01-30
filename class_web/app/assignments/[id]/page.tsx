@@ -1146,14 +1146,8 @@ export default function AssignmentDetailPage() {
                   {!groupMeetsMin && (
                     <div className="text-xs text-rose-600">Nhóm chưa đủ số lượng thành viên theo yêu cầu.</div>
                   )}
-                  {groupMode !== "student" && (
-                    <div className="text-xs text-gray-500">Nhóm được giáo viên chia, không thể chỉnh sửa.</div>
-                  )}
                   {groupLocked && (
                     <div className="text-xs text-rose-600">Đã quá thời điểm chốt nhóm.</div>
-                  )}
-                  {myGroupHasSubmission && (
-                    <div className="text-xs text-rose-600">Nhóm đã nộp bài nên không thể thay đổi.</div>
                   )}
                   <div className="space-y-2">
                     {myGroupMembers.map((m: any) => {
@@ -1652,17 +1646,32 @@ export default function AssignmentDetailPage() {
                     </div>
                     {groupEnabled && selectedGroupEntry?.members?.length ? (
                       <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-300">
-                        {selectedGroupEntry.members.map((m: any) => (
-                          <span key={m.userId} className="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-800 px-2 py-1">
-                            <span className="h-5 w-5 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-semibold">
-                              {getInitials(m.name || m.email || "?")}
+                        {selectedGroupEntry.members.map((m: any) => {
+                          const avatar = getAvatar(m);
+                          const isLeader = String(m.role || "").toLowerCase() === "leader";
+                          return (
+                            <span
+                              key={m.userId}
+                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-800 px-2 py-1 w-fit max-w-[150px]"
+                            >
+                              {avatar ? (
+                                <img
+                                  src={avatar}
+                                  alt={m.name || m.email || "Member"}
+                                  className="h-5 w-5 rounded-full object-cover border border-white/40"
+                                />
+                              ) : (
+                                <span className="h-5 w-5 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-semibold">
+                                  {getInitials(m.name || m.email || "?")}
+                                </span>
+                              )}
+                              <span className="truncate max-w-[70px]">{m.name || m.email}</span>
+                              {isLeader && (
+                                <span className="text-[10px] text-indigo-600">Trưởng nhóm</span>
+                              )}
                             </span>
-                            <span className="truncate max-w-[160px]">{m.name || m.email}</span>
-                            {String(m.role || "").toLowerCase() === "leader" && (
-                              <span className="text-[10px] text-indigo-600">Leader</span>
-                            )}
-                          </span>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : null}
                   </div>

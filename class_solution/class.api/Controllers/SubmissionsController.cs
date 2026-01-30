@@ -132,7 +132,7 @@ namespace class_api.Controllers
                 var gradedExists = await _db.Grades.AnyAsync(g =>
                     g.AssignmentId == assignmentId &&
                     groupMemberIds.Contains(g.UserId) &&
-                    IsGradedStatus(g.Status), ct);
+                    (g.Status != null && (g.Status.ToLower() == "graded" || g.Status.ToLower() == "returned")), ct);
                 if (gradedExists)
                 {
                     return BadRequest(new { message = "Bài đã được chấm nên không thể nộp lại." });
@@ -143,7 +143,7 @@ namespace class_api.Controllers
                 var gradedExists = await _db.Grades.AnyAsync(g =>
                     g.AssignmentId == assignmentId &&
                     g.UserId == userId &&
-                    IsGradedStatus(g.Status), ct);
+                    (g.Status != null && (g.Status.ToLower() == "graded" || g.Status.ToLower() == "returned")), ct);
                 if (gradedExists)
                 {
                     return BadRequest(new { message = "Bài đã được chấm nên không thể nộp lại." });
@@ -253,7 +253,7 @@ namespace class_api.Controllers
                 var gradedExists = await _db.Grades.AnyAsync(g =>
                     g.AssignmentId == assignmentId &&
                     groupMemberIds.Contains(g.UserId) &&
-                    IsGradedStatus(g.Status), ct);
+                    (g.Status != null && (g.Status.ToLower() == "graded" || g.Status.ToLower() == "returned")), ct);
                 if (gradedExists)
                 {
                     return BadRequest(new { message = "Bài đã được chấm nên không thể nộp lại." });
@@ -264,7 +264,7 @@ namespace class_api.Controllers
                 var gradedExists = await _db.Grades.AnyAsync(g =>
                     g.AssignmentId == assignmentId &&
                     g.UserId == userId &&
-                    IsGradedStatus(g.Status), ct);
+                    (g.Status != null && (g.Status.ToLower() == "graded" || g.Status.ToLower() == "returned")), ct);
                 if (gradedExists)
                 {
                     return BadRequest(new { message = "Bài đã được chấm nên không thể nộp lại." });

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { resolveAvatar } from "@/utils/resolveAvatar";
 
 interface GradesTableProps {
@@ -14,6 +14,18 @@ export default function GradesTable({ assignments, members }: GradesTableProps) 
   const assignmentCount = normalizedAssignments.length || 1;
   const studentColWidth = 220;
   const assignmentColWidth = 220;
+  const sortedMembers = useMemo(() => {
+    const list = [...normalizedMembers];
+    return list.sort((a: any, b: any) => {
+      const nameA = String(a.fullName || a.FullName || "").trim();
+      const nameB = String(b.fullName || b.FullName || "").trim();
+      const lastA = nameA.split(/\s+/).filter(Boolean).pop() || "";
+      const lastB = nameB.split(/\s+/).filter(Boolean).pop() || "";
+      const cmpLast = lastA.localeCompare(lastB, "vi", { sensitivity: "base" });
+      if (cmpLast !== 0) return cmpLast;
+      return nameA.localeCompare(nameB, "vi", { sensitivity: "base" });
+    });
+  }, [normalizedMembers]);
 
   function renderCell(a: any, m: any) {
     const grade = (a.grades || a.Grades || []).find(
@@ -45,9 +57,6 @@ export default function GradesTable({ assignments, members }: GradesTableProps) 
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 w-full max-w-full overflow-hidden min-w-0">
       <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-4 py-3">
         <div className="font-semibold text-gray-900 dark:text-white">Điểm bài tập</div>
-        <button className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">
-          Sắp xếp theo họ
-        </button>
       </div>
 
       <div className="w-full max-w-full overflow-x-auto">
@@ -75,7 +84,7 @@ export default function GradesTable({ assignments, members }: GradesTableProps) 
           </div>
 
           <div className="space-y-1">
-            {normalizedMembers.map((member) => (
+            {sortedMembers.map((member) => (
               <div
                 key={member.userId || member.UserId || member.email || member.Email}
                 className="grid border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-zinc-950 last:border-none"
