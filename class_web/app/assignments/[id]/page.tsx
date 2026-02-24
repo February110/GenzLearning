@@ -1465,9 +1465,6 @@ export default function AssignmentDetailPage() {
                   Nộp muộn: {stats.late}
                 </span>
               )}
-              <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-gray-700 dark:border-gray-800 dark:bg-zinc-800 dark:text-gray-200">
-                Tổng: {stats.total}
-              </span>
               <button
                 type="button"
                 onClick={downloadGradesFile}
