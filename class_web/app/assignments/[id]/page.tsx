@@ -1862,10 +1862,10 @@ export default function AssignmentDetailPage() {
                     )}
                   </div>
 
-                  {/* Trao đổi riêng với học viên này (đưa xuống dưới cùng) */}
+           
                   <CommentsPanel assignmentId={id} studentId={selectedCommentUserId} />
 
-                  {/* Nhận xét là chung cho toàn bài: bỏ danh sách theo tệp */}
+                
                 </div>
               )}
             </div>

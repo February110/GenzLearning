@@ -22,6 +22,8 @@ namespace class_api.Infrastructure.Data
         public DbSet<Comment> Comments => Set<Comment>();
         public DbSet<Announcement> Announcements => Set<Announcement>();
         public DbSet<AnnouncementComment> AnnouncementComments => Set<AnnouncementComment>();
+        public DbSet<LectureSection> LectureSections => Set<LectureSection>();
+        public DbSet<LectureLesson> LectureLessons => Set<LectureLesson>();
         public DbSet<Grade> Grades => Set<Grade>();
         public DbSet<Meeting> Meetings => Set<Meeting>();
         public DbSet<MeetingParticipant> MeetingParticipants => Set<MeetingParticipant>();

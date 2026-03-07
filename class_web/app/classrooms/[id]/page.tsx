@@ -14,6 +14,7 @@ import ClassroomSettingsSheet from "@/components/classrooms/detail/ClassroomSett
 import AssignmentsCard from "@/components/classrooms/detail/AssignmentsCard";
 import MembersCard from "@/components/classrooms/detail/MembersCard";
 import ClassroomGroupsCard from "@/components/classrooms/detail/ClassroomGroupsCard";
+import LecturePanel from "@/components/classrooms/detail/LecturePanel";
 import AssignmentCreateModal from "@/components/classrooms/detail/AssignmentCreateModal";
 import AssignmentEditModal from "@/components/classrooms/detail/AssignmentEditModal";
 import ClassroomTabMenu, { type TabItem } from "@/components/classrooms/detail/ClassroomTabMenu";
@@ -490,6 +491,7 @@ export default function ClassroomDetailPage() {
     const items: TabItem[] = [
       { id: "news", label: "Bảng tin" },
       { id: "assignments", label: "Bài tập trên lớp" },
+      { id: "lectures", label: "Bài giảng" },
       { id: "meetings", label: "Cuộc họp" },
       { id: "members", label: "Mọi người" },
       { id: "groups", label: "Nhóm" },
@@ -744,6 +746,12 @@ export default function ClassroomDetailPage() {
             onCreate={() => setShowCreate(true)}
             onEdit={startEdit}
             onDelete={removeAssignment}
+          />
+        )}
+        {activeTab === "lectures" && (
+          <LecturePanel
+            classroomId={String(classroomId)}
+            isTeacher={isTeacher}
           />
         )}
         {activeTab === "members" && (
