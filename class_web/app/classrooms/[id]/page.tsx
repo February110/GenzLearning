@@ -491,8 +491,8 @@ export default function ClassroomDetailPage() {
   const tabs = useMemo<TabItem[]>(() => {
     const items: TabItem[] = [
       { id: "news", label: "Bảng tin" },
-      { id: "assignments", label: "Bài tập trên lớp" },
       { id: "lectures", label: "Bài giảng" },
+      { id: "assignments", label: "Bài tập trên lớp" },
       { id: "meetings", label: "Cuộc họp" },
       { id: "members", label: "Mọi người" },
       { id: "groups", label: "Nhóm" },

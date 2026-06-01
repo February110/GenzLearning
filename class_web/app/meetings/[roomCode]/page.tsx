@@ -19,12 +19,14 @@ export default function MeetingRoomPage() {
   const [memberDirectory, setMemberDirectory] = useState<Record<string, { name: string; avatar?: string }>>({});
   const meetingIdRef = useRef<string | null>(null);
   const meetingInfoRef = useRef<any | null>(null);
+  const exitingRef = useRef(false);
   const [showChat, setShowChat] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [localAvatar, setLocalAvatar] = useState<string | undefined>();
   const [localUserId, setLocalUserId] = useState<string | null>(null);
 
   const handleMeetingEnded = useCallback(() => {
+    if (exitingRef.current) return;
     toast.error("Cuộc họp đã kết thúc");
     const info = meetingInfoRef.current;
     const meetingId = info?.id ?? info?.Id ?? meetingIdRef.current;
@@ -78,6 +80,7 @@ export default function MeetingRoomPage() {
           id: data.id ?? data.Id,
           roomCode: data.roomCode ?? data.RoomCode,
           title: data.title ?? data.Title,
+          memberRole: data.memberRole ?? data.MemberRole ?? data.role ?? data.Role,
           classroom: data.classroom ?? data.Classroom,
           startedAt: data.startedAt ?? data.StartedAt,
           members: data?.classroom?.Members ?? [],
@@ -128,10 +131,23 @@ export default function MeetingRoomPage() {
     };
   }, [roomCode, joinRoom, leaveRoom, router]);
 
+  const isTeacher = String(meeting?.memberRole ?? meeting?.MemberRole ?? "").toLowerCase() === "teacher";
+
   const handleLeave = async () => {
+    exitingRef.current = true;
     const meetingId = meetingIdRef.current;
+    const shouldEndMeeting = !!(isTeacher && meetingId);
     if (meetingId) {
-      await api.post(`/meetings/${meetingId}/leave`).catch(() => {});
+      const endpoint = shouldEndMeeting ? "end" : "leave";
+      try {
+        await api.post(`/meetings/${meetingId}/${endpoint}`);
+      } catch {
+        if (shouldEndMeeting) {
+          exitingRef.current = false;
+          toast.error("Không thể kết thúc cuộc họp");
+          return;
+        }
+      }
     }
     await stopScreenShare();
     await leaveRoom();
@@ -423,6 +439,7 @@ export default function MeetingRoomPage() {
           onToggleScreenShare={handleToggleScreenShare}
           isScreenSharing={isScreenSharing}
           onLeave={handleLeave}
+          leaveTitle={isTeacher ? "Kết thúc cuộc họp" : "Rời phòng"}
         />
       </div>
     </div>

@@ -1,5 +1,0 @@
-D:\Code\class\.tmpobj\Debug\net9.0\class.Domain.GeneratedMSBuildEditorConfig.editorconfig
-D:\Code\class\.tmpobj\Debug\net9.0\class.Domain.AssemblyInfoInputs.cache
-D:\Code\class\.tmpobj\Debug\net9.0\class.Domain.AssemblyInfo.cs
-D:\Code\class\.tmpobj\Debug\net9.0\class.Domain.csproj.CoreCompileInputs.cache
-D:\Code\class\.tmpobj\Debug\net9.0\class.Domain.sourcelink.json

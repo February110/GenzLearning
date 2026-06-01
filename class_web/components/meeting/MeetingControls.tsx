@@ -10,6 +10,7 @@ type MeetingControlsProps = {
   onLeave: () => void;
   onToggleScreenShare: () => void;
   isScreenSharing: boolean;
+  leaveTitle?: string;
 };
 
 const controlCls =
@@ -23,6 +24,7 @@ export default function MeetingControls({
   onToggleScreenShare,
   isScreenSharing,
   onLeave,
+  leaveTitle,
 }: MeetingControlsProps) {
   return (
     <div className="border-t border-white/10 bg-gradient-to-t from-black via-zinc-950/80 to-zinc-950 p-6">
@@ -55,7 +57,7 @@ export default function MeetingControls({
           type="button"
           onClick={onLeave}
           className={`${controlCls} h-14 w-14 bg-red-600 hover:bg-red-500`}
-          title="Rời phòng"
+          title={leaveTitle ?? "Rời phòng"}
         >
           <PhoneOff className="h-6 w-6" />
         </button>

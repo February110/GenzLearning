@@ -29,6 +29,9 @@ logs/
 *.seed
 .tmp/
 tmp/
+.tmpbuild/
+.tmpbuild-api/
+.tmpobj/
 
 ### Node.js / Next.js (covers nested workspaces)
 **/node_modules/

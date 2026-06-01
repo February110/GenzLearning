@@ -25,6 +25,7 @@ export default function useMeetingRoom(roomCode?: string, options: MeetingRoomOp
   const screenSendersRef = useRef<Map<string, RTCRtpSender[]>>(new Map());
   const pendingScreenRef = useRef<Set<string>>(new Set());
   const connectionRef = useRef<HubConnection | null>(null);
+  const leaveRoomRef = useRef<Promise<void> | null>(null);
   const optionsRef = useRef<MeetingRoomOptions>({});
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [peers, setPeers] = useState<PeersRecord>({});
@@ -167,45 +168,59 @@ export default function useMeetingRoom(roomCode?: string, options: MeetingRoomOp
   }, [renegotiatePeer]);
 
   const leaveRoom = useCallback(async () => {
-    const conn = connectionRef.current;
-    if (conn && conn.state !== HubConnectionState.Disconnected) {
-      await conn.invoke("LeaveRoom").catch(() => {});
-    }
-    if (conn) {
-      conn.off("ParticipantJoined");
-      conn.off("ReceiveOffer");
-      conn.off("ReceiveAnswer");
-      conn.off("ReceiveIceCandidate");
-      conn.off("ParticipantLeft");
-      conn.off("MeetingEnded");
-      if (conn.state !== HubConnectionState.Disconnected) {
-        await conn.stop().catch(() => {});
+    if (leaveRoomRef.current) return leaveRoomRef.current;
+    leaveRoomRef.current = (async () => {
+      const conn = connectionRef.current;
+      if (conn) {
+        conn.off("ParticipantJoined");
+        conn.off("ReceiveOffer");
+        conn.off("ReceiveAnswer");
+        conn.off("ReceiveIceCandidate");
+        conn.off("ParticipantLeft");
+        conn.off("MeetingEnded");
+        conn.off("ParticipantsSnapshot");
+        conn.off("ScreenShareUpdated");
+        conn.off("ReceiveChatMessage");
+        conn.off("CameraStateUpdated");
+        if (
+          conn.state !== HubConnectionState.Disconnected &&
+          conn.state !== HubConnectionState.Disconnecting
+        ) {
+          try {
+            await conn.stop();
+          } catch {
+            // Ignore shutdown races when the transport is already closing.
+          }
+        }
+        connectionRef.current = null;
       }
-      connectionRef.current = null;
-    }
 
-    peersRef.current.forEach((peer) => peer.close());
-    peersRef.current.clear();
-    setPeers({});
+      peersRef.current.forEach((peer) => peer.close());
+      peersRef.current.clear();
+      setPeers({});
 
-    const stream = streamRef.current;
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
-    streamRef.current = null;
-    setLocalStream(null);
-    setAudioEnabled(true);
-    setVideoEnabled(true);
-    setParticipantNames({});
-    setConnectionUsers({});
-    setScreenStreams({});
-    setScreenLabels({});
-    setIsScreenSharing(false);
-    setChatMessages([]);
-    setCameraStates({});
-    screenStreamRef.current = null;
-    screenSendersRef.current.clear();
-    pendingScreenRef.current.clear();
+      const stream = streamRef.current;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      streamRef.current = null;
+      setLocalStream(null);
+      setAudioEnabled(true);
+      setVideoEnabled(true);
+      setParticipantNames({});
+      setConnectionUsers({});
+      setScreenStreams({});
+      setScreenLabels({});
+      setIsScreenSharing(false);
+      setChatMessages([]);
+      setCameraStates({});
+      screenStreamRef.current = null;
+      screenSendersRef.current.clear();
+      pendingScreenRef.current.clear();
+    })().finally(() => {
+      leaveRoomRef.current = null;
+    });
+    return leaveRoomRef.current;
   }, []);
 
   const registerHandlers = useCallback(
@@ -272,8 +287,14 @@ export default function useMeetingRoom(roomCode?: string, options: MeetingRoomOp
 
       const handleMeetingEnded = async (payload: any) => {
         if (payload?.roomCode && roomCode && payload.roomCode !== roomCode) return;
-        await leaveRoom();
-        optionsRef.current.onMeetingEnded?.(payload);
+        void (async () => {
+          try {
+            await leaveRoom();
+          } catch {
+            // Ignore teardown races when the hub is already closing.
+          }
+          optionsRef.current.onMeetingEnded?.(payload);
+        })();
       };
 
       const handleSnapshot = (items: any[]) => {
