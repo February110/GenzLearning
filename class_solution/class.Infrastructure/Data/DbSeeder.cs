@@ -1,5 +1,4 @@
 using class_api.Domain;
-using Microsoft.EntityFrameworkCore;
 
 namespace class_api.Infrastructure.Data
 {
@@ -7,8 +6,6 @@ namespace class_api.Infrastructure.Data
     {
         public static void SeedAdmin(ApplicationDbContext db)
         {
-            db.Database.Migrate();
-
             const string adminEmail = "admin@appclass.com";
             var adminByEmail = db.Users.FirstOrDefault(u => u.Email == adminEmail);
             if (adminByEmail == null)

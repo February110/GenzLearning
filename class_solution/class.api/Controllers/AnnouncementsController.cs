@@ -22,10 +22,11 @@ namespace class_api.Controllers
         private readonly IStorage _storage;
         private readonly IActivityStream _activityStream;
         private readonly INotificationDispatcher _dispatcher;
+        private readonly INotificationService _notifications;
 
-        public AnnouncementsController(ApplicationDbContext db, ICurrentUser me, IHubContext<ClassroomHub> hub, IStorage storage, IActivityStream activityStream, INotificationDispatcher dispatcher)
+        public AnnouncementsController(ApplicationDbContext db, ICurrentUser me, IHubContext<ClassroomHub> hub, IStorage storage, IActivityStream activityStream, INotificationDispatcher dispatcher, INotificationService notifications)
         {
-            _db = db; _me = me; _hub = hub; _storage = storage; _activityStream = activityStream; _dispatcher = dispatcher;
+            _db = db; _me = me; _hub = hub; _storage = storage; _activityStream = activityStream; _dispatcher = dispatcher; _notifications = notifications;
         }
 
         private static string Slugify(string? input)
@@ -92,6 +93,7 @@ namespace class_api.Controllers
                 catch (Exception ex)
                 {
                     Console.WriteLine($"⚠️ Dispatch announcement notification failed: {ex.Message}");
+                    await _notifications.NotifyUsersAsync(recipients, "Thông báo mới", preview, "announcement", ann.ClassroomId);
                 }
             }
 
@@ -206,6 +208,7 @@ namespace class_api.Controllers
                 catch (Exception ex)
                 {
                     Console.WriteLine($"⚠️ Dispatch announcement notification failed: {ex.Message}");
+                    await _notifications.NotifyUsersAsync(recipients, "Thông báo mới", preview, "announcement", ann.ClassroomId);
                 }
             }
 
@@ -433,6 +436,7 @@ namespace class_api.Controllers
                     catch (Exception ex)
                     {
                         Console.WriteLine($"⚠️ Dispatch announcement notification failed: {ex.Message}");
+                        await _notifications.NotifyUsersAsync(recipients, "Thông báo mới", preview, "announcement", newAnn.ClassroomId);
                     }
                 }
 

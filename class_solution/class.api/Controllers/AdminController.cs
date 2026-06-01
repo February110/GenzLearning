@@ -20,6 +20,7 @@ namespace class_api.Controllers
         private readonly ApplicationDbContext _db;
         private readonly IActivityStream _activityStream;
         private readonly INotificationDispatcher _dispatcher;
+        private readonly INotificationService _notifications;
         private readonly IDistributedCache _cache;
         private readonly JsonSerializerOptions _jsonOptions;
         private readonly TimeSpan _overviewCacheDuration;
@@ -30,6 +31,7 @@ namespace class_api.Controllers
             ApplicationDbContext db,
             IActivityStream activityStream,
             INotificationDispatcher dispatcher,
+            INotificationService notifications,
             IDistributedCache cache,
             IConfiguration configuration,
             IOptions<JsonOptions> jsonOptionsAccessor)
@@ -37,6 +39,7 @@ namespace class_api.Controllers
             _db = db;
             _activityStream = activityStream;
             _dispatcher = dispatcher;
+            _notifications = notifications;
             _cache = cache;
             _jsonOptions = jsonOptionsAccessor.Value.JsonSerializerOptions;
 
@@ -520,7 +523,15 @@ namespace class_api.Controllers
                 .ToListAsync();
             if (studentIds.Any())
             {
-                await _dispatcher.DispatchAsync(studentIds, "Bài tập mới", $"\"{assignment.Title}\" vừa được đăng.", "assignment", classroom.Id, assignment.Id);
+                try
+                {
+                    await _dispatcher.DispatchAsync(studentIds, "Bài tập mới", $"\"{assignment.Title}\" vừa được đăng.", "assignment", classroom.Id, assignment.Id);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Dispatch assignment notification failed: {ex.Message}");
+                    await _notifications.NotifyUsersAsync(studentIds, "Bài tập mới", $"\"{assignment.Title}\" vừa được đăng.", "assignment", classroom.Id, assignment.Id);
+                }
             }
             return Ok(new { assignment.Id, assignment.Title });
         }

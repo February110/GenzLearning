@@ -27,6 +27,7 @@ namespace class_api.Services
                     using var scope = _provider.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                     var dispatcher = scope.ServiceProvider.GetRequiredService<INotificationDispatcher>();
+                    var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
                     var now = DateTime.UtcNow;
                     var dueWindow = now.AddHours(24);
@@ -56,8 +57,16 @@ namespace class_api.Services
                         {
                             var dueLocal = ConvertToVietnamTime(assignment.DueAt!.Value);
                             var message = $"Bài tập \"{assignment.Title}\" sắp đến hạn vào {dueLocal:dd/MM HH:mm}.";
-                            await dispatcher.DispatchAsync(studentIds, "Bài tập sắp đến hạn", message, "assignment-due", assignment.ClassroomId, assignment.Id, null, stoppingToken);
-                }
+                            try
+                            {
+                                await dispatcher.DispatchAsync(studentIds, "Bài tập sắp đến hạn", message, "assignment-due", assignment.ClassroomId, assignment.Id, null, stoppingToken);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "RabbitMQ unavailable. Falling back to direct notification delivery.");
+                                await notifications.NotifyUsersAsync(studentIds, "Bài tập sắp đến hạn", message, "assignment-due", assignment.ClassroomId, assignment.Id, null, stoppingToken);
+                            }
+                        }
                     }
                 }
                 catch (Exception ex)

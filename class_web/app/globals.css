@@ -4,13 +4,13 @@
 
 @theme {
   --font-*: initial;
-  --font-ui: var(--font-roboto), "Segoe UI", system-ui, -apple-system,
+  --font-ui: "Inter", "Segoe UI", system-ui, -apple-system,
     "Helvetica Neue", Arial, sans-serif;
-  --font-heading: var(--font-roboto), "Segoe UI", system-ui, -apple-system,
+  --font-heading: "Inter", "Segoe UI", system-ui, -apple-system,
     "Helvetica Neue", Arial, sans-serif;
-  --font-sans: var(--font-roboto), "Segoe UI", system-ui, -apple-system,
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system,
     "Helvetica Neue", Arial, sans-serif;
-  --default-font-family: var(--font-roboto), "Segoe UI", system-ui,
+  --default-font-family: "Inter", "Segoe UI", system-ui,
     -apple-system, "Helvetica Neue", Arial, sans-serif;
 
   --color-current: currentColor;

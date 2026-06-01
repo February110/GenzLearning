@@ -10,7 +10,6 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using class_api.Json;
 using StackExchange.Redis;
-using RabbitMQ.Client;
 using class_api.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,12 +20,24 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 var redisConfiguration = builder.Configuration.GetConnectionString("Redis") ?? builder.Configuration["Redis:Configuration"];
 if (!string.IsNullOrWhiteSpace(redisConfiguration))
 {
-    builder.Services.AddStackExchangeRedisCache(options =>
+    try
     {
-        options.Configuration = redisConfiguration;
-        options.InstanceName = builder.Configuration["Redis:InstanceName"] ?? "class:";
-    });
-    builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConfiguration));
+        var redisOptions = ConfigurationOptions.Parse(redisConfiguration);
+        redisOptions.AbortOnConnectFail = false;
+        redisOptions.ConnectTimeout = 3000;
+        var multiplexer = ConnectionMultiplexer.Connect(redisOptions);
+
+        builder.Services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConfiguration;
+            options.InstanceName = builder.Configuration["Redis:InstanceName"] ?? "class:";
+        });
+        builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+    }
+    catch (Exception)
+    {
+        builder.Services.AddDistributedMemoryCache();
+    }
 }
 else
 {
@@ -51,23 +62,6 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IActivityStream, ActivityStream>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("RabbitMQ"));
-var rabbitSection = builder.Configuration.GetSection("RabbitMQ").Get<RabbitMqOptions>();
-if (rabbitSection is null || !rabbitSection.Enabled)
-{
-    throw new InvalidOperationException("RabbitMQ configuration is required. Please provide RabbitMQ settings in appsettings or environment variables.");
-}
-
-builder.Services.AddSingleton<IConnection>(_ =>
-{
-    var factory = new ConnectionFactory
-    {
-        HostName = rabbitSection.HostName,
-        Port = rabbitSection.Port,
-        UserName = rabbitSection.UserName,
-        Password = rabbitSection.Password
-    };
-    return factory.CreateConnection();
-});
 builder.Services.AddScoped<INotificationDispatcher, RabbitNotificationDispatcher>();
 builder.Services.Configure<WorkerAuthOptions>(builder.Configuration.GetSection("WorkerAuth"));
 
@@ -155,6 +149,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
     DbSeeder.SeedAdmin(db);
 }
 app.UseSwagger();
@@ -169,11 +164,5 @@ app.MapHub<ClassroomHub>("/hubs/classroom");
 app.MapHub<MeetingHub>("/hubs/meeting");
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ActivityHub>("/hubs/activity");
-
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.Migrate();
-}
 
 app.Run();

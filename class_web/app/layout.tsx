@@ -1,16 +1,12 @@
 // app/layout.tsx
 import "./globals.css";
+import "@fontsource/inter/300.css";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/700.css";
 import Script from "next/script";
 import NextTopLoader from "nextjs-toploader";
-import { Roboto } from "next/font/google";
 import ClientWrapper from "@/components/ClientWrapper";
-
-const roboto = Roboto({
-  subsets: ["latin", "latin-ext", "vietnamese"],
-  display: "swap",
-  variable: "--font-roboto",
-  weight: ["300", "400", "500", "700"],
-});
 
 export const metadata = {
   title: "GenZ Learning",
@@ -23,7 +19,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body className={`${roboto.variable} ${roboto.className}`}>
+      <body>
         {/* Ensure theme class is applied ASAP to avoid mismatches across routes */}
         <Script id="theme-init" strategy="beforeInteractive">
           {`

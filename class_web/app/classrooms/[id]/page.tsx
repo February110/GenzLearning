@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/api/client";
 import { toast } from "react-hot-toast";
@@ -25,6 +25,7 @@ export default function ClassroomDetailPage() {
   const params = useParams();
   const classroomId = params?.id as string;
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [classroom, setClassroom] = useState<any>(null);
   const [isTeacher, setIsTeacher] = useState(false);
@@ -68,7 +69,7 @@ export default function ClassroomDetailPage() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiResults, setAiResults] = useState<any[]>([]);
   const [flash, setFlash] = useState("");
-  const [activeTab, setActiveTab] = useState("news");
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "news");
   const [activeMeeting, setActiveMeeting] = useState<any | null>(null);
   const [meetingBusy, setMeetingBusy] = useState(false);
   const [meetingHistory, setMeetingHistory] = useState<any[]>([]);
@@ -503,10 +504,26 @@ export default function ClassroomDetailPage() {
   }, [isTeacher]);
 
   useEffect(() => {
-    if (tabs.length) {
-      setActiveTab(tabs[0].id);
+    if (!tabs.length) return;
+    const requestedTab = searchParams.get("tab");
+    if (requestedTab && tabs.some((tab) => tab.id === requestedTab)) {
+      setActiveTab(requestedTab);
+      return;
     }
-  }, [tabs]);
+
+    setActiveTab((current) => (tabs.some((tab) => tab.id === current) ? current : tabs[0].id));
+  }, [searchParams, tabs]);
+
+  useEffect(() => {
+    if (!tabs.length || !activeTab || !classroomId) return;
+
+    const currentTab = searchParams.get("tab");
+    if (currentTab === activeTab) return;
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("tab", activeTab);
+    router.replace(`/classrooms/${classroomId}?${nextParams.toString()}`, { scroll: false });
+  }, [activeTab, classroomId, router, searchParams, tabs]);
 
   async function createAssignment(e: React.FormEvent) {
     e.preventDefault();

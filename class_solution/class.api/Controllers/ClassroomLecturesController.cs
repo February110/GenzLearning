@@ -293,7 +293,12 @@ namespace class_api.Controllers
             if (classroom == null) return NotFound(new { message = "Không tìm thấy lớp học." });
 
             var oldKey = lesson.VideoKey;
-            var prefix = BuildVideoPrefix(classroom, lesson.SectionId, lesson.Id);
+            var prefix = BuildVideoPrefix(
+                classroom,
+                lesson.SectionId,
+                lesson.Section?.Title,
+                lesson.Id,
+                lesson.Title);
 
             await using var stream = file.OpenReadStream();
             var (key, sizeBytes) = await _storage.UploadAsync(
@@ -371,15 +376,7 @@ namespace class_api.Controllers
             list.Remove(target);
             var index = Math.Clamp(desiredOrder - 1, 0, list.Count);
             list.Insert(index, target);
-
-            var now = DateTime.UtcNow;
-            for (var i = 0; i < list.Count; i++)
-            {
-                list[i].OrderIndex = i + 1;
-                list[i].UpdatedAt = now;
-            }
-
-            await _db.SaveChangesAsync(ct);
+            await ApplySectionOrdering(list, ct);
         }
 
         private async Task ReorderLessons(Guid sectionId, Guid lessonId, int desiredOrder, CancellationToken ct)
@@ -396,15 +393,7 @@ namespace class_api.Controllers
             list.Remove(target);
             var index = Math.Clamp(desiredOrder - 1, 0, list.Count);
             list.Insert(index, target);
-
-            var now = DateTime.UtcNow;
-            for (var i = 0; i < list.Count; i++)
-            {
-                list[i].OrderIndex = i + 1;
-                list[i].UpdatedAt = now;
-            }
-
-            await _db.SaveChangesAsync(ct);
+            await ApplyLessonOrdering(list, ct);
         }
 
         private async Task CompactSectionOrders(Guid classroomId, CancellationToken ct)
@@ -420,12 +409,10 @@ namespace class_api.Controllers
             {
                 var expected = i + 1;
                 if (list[i].OrderIndex == expected) continue;
-                list[i].OrderIndex = expected;
-                list[i].UpdatedAt = DateTime.UtcNow;
                 changed = true;
             }
 
-            if (changed) await _db.SaveChangesAsync(ct);
+            if (changed) await ApplySectionOrdering(list, ct);
         }
 
         private async Task CompactLessonOrders(Guid sectionId, CancellationToken ct)
@@ -441,20 +428,69 @@ namespace class_api.Controllers
             {
                 var expected = i + 1;
                 if (list[i].OrderIndex == expected) continue;
-                list[i].OrderIndex = expected;
-                list[i].UpdatedAt = DateTime.UtcNow;
                 changed = true;
             }
 
-            if (changed) await _db.SaveChangesAsync(ct);
+            if (changed) await ApplyLessonOrdering(list, ct);
         }
 
-        private static string BuildVideoPrefix(Classroom classroom, Guid sectionId, Guid lessonId)
+        private async Task ApplySectionOrdering(List<LectureSection> list, CancellationToken ct)
+        {
+            var now = DateTime.UtcNow;
+
+            // Use a temporary negative ordering first to avoid unique-index collisions during swaps.
+            for (var i = 0; i < list.Count; i++)
+            {
+                list[i].OrderIndex = -(i + 1);
+                list[i].UpdatedAt = now;
+            }
+            await _db.SaveChangesAsync(ct);
+
+            for (var i = 0; i < list.Count; i++)
+            {
+                list[i].OrderIndex = i + 1;
+                list[i].UpdatedAt = now;
+            }
+            await _db.SaveChangesAsync(ct);
+        }
+
+        private async Task ApplyLessonOrdering(List<LectureLesson> list, CancellationToken ct)
+        {
+            var now = DateTime.UtcNow;
+
+            // Use a temporary negative ordering first to avoid unique-index collisions during swaps.
+            for (var i = 0; i < list.Count; i++)
+            {
+                list[i].OrderIndex = -(i + 1);
+                list[i].UpdatedAt = now;
+            }
+            await _db.SaveChangesAsync(ct);
+
+            for (var i = 0; i < list.Count; i++)
+            {
+                list[i].OrderIndex = i + 1;
+                list[i].UpdatedAt = now;
+            }
+            await _db.SaveChangesAsync(ct);
+        }
+
+        private static string BuildVideoPrefix(
+            Classroom classroom,
+            Guid sectionId,
+            string? sectionTitle,
+            Guid lessonId,
+            string? lessonTitle)
         {
             var classSlug = Slugify(classroom.Name);
             var classShort = classroom.Id.ToString();
             if (classShort.Length > 8) classShort = classShort[..8];
-            return $"lectures/{classSlug}-{classShort}/{sectionId}/lesson-{lessonId}";
+            var sectionSlug = Slugify(sectionTitle);
+            var lessonSlug = Slugify(lessonTitle);
+            var sectionShort = sectionId.ToString();
+            if (sectionShort.Length > 8) sectionShort = sectionShort[..8];
+            var lessonShort = lessonId.ToString();
+            if (lessonShort.Length > 8) lessonShort = lessonShort[..8];
+            return $"lectures/{classSlug}-{classShort}/section-{sectionSlug}-{sectionShort}/lesson-{lessonSlug}-{lessonShort}";
         }
 
         private static string Slugify(string? input)

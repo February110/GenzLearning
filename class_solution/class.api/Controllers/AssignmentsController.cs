@@ -23,10 +23,11 @@ namespace class_api.Controllers
         private readonly IHubContext<ClassroomHub> _hub;
         private readonly IActivityStream _activityStream;
         private readonly INotificationDispatcher _dispatcher;
+        private readonly INotificationService _notifications;
 
-        public AssignmentsController(ApplicationDbContext db, ICurrentUser me, IStorage storage, IHubContext<ClassroomHub> hub, IActivityStream activityStream, INotificationDispatcher dispatcher)
+        public AssignmentsController(ApplicationDbContext db, ICurrentUser me, IStorage storage, IHubContext<ClassroomHub> hub, IActivityStream activityStream, INotificationDispatcher dispatcher, INotificationService notifications)
         {
-            _db = db; _me = me; _storage = storage; _hub = hub; _activityStream = activityStream; _dispatcher = dispatcher;
+            _db = db; _me = me; _storage = storage; _hub = hub; _activityStream = activityStream; _dispatcher = dispatcher; _notifications = notifications;
         }
 
         private static string Slugify(string? input)
@@ -174,6 +175,7 @@ namespace class_api.Controllers
                 catch (Exception ex)
                 {
                     Console.WriteLine($"⚠️ Dispatch assignment notification failed: {ex.Message}");
+                    await _notifications.NotifyUsersAsync(studentRecipients, "Bài tập mới", $"\"{a.Title}\" vừa được đăng.", "assignment", dto.ClassroomId, a.Id, null);
                 }
             }
 
@@ -309,6 +311,7 @@ namespace class_api.Controllers
                 catch (Exception ex)
                 {
                     Console.WriteLine($"⚠️ Dispatch assignment notification failed: {ex.Message}");
+                    await _notifications.NotifyUsersAsync(studentIds, "Bài tập mới", $"\"{a.Title}\" vừa được đăng.", "assignment", ClassroomId, a.Id, null, ct);
                 }
             }
 

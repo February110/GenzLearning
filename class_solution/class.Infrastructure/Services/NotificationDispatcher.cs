@@ -11,14 +11,12 @@ namespace class_api.Services
 {
     public sealed class RabbitNotificationDispatcher : INotificationDispatcher
     {
-        private readonly IConnection _connection;
         private readonly RabbitMqOptions _options;
         private readonly JsonSerializerOptions _serializerOptions;
         private readonly ILogger<RabbitNotificationDispatcher> _logger;
 
-        public RabbitNotificationDispatcher(IConnection connection, IOptions<RabbitMqOptions> options, ILogger<RabbitNotificationDispatcher> logger)
+        public RabbitNotificationDispatcher(IOptions<RabbitMqOptions> options, ILogger<RabbitNotificationDispatcher> logger)
         {
-            _connection = connection;
             _logger = logger;
             _options = options.Value;
             _serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
@@ -26,6 +24,12 @@ namespace class_api.Services
 
         public Task DispatchAsync(IEnumerable<Guid> userIds, string title, string message, string type, Guid? classroomId = null, Guid? assignmentId = null, object? metadata = null, CancellationToken cancellationToken = default)
         {
+            if (!_options.Enabled || string.IsNullOrWhiteSpace(_options.HostName))
+            {
+                _logger.LogWarning("RabbitMQ is not configured. Notification dispatch skipped.");
+                throw new InvalidOperationException("RabbitMQ is not configured.");
+            }
+
             var payload = new NotificationQueueMessage
             {
                 UserIds = userIds.Distinct().ToList(),
@@ -39,7 +43,16 @@ namespace class_api.Services
 
             try
             {
-                using var channel = _connection.CreateModel();
+                var factory = new ConnectionFactory
+                {
+                    HostName = _options.HostName,
+                    Port = _options.Port,
+                    UserName = _options.UserName,
+                    Password = _options.Password
+                };
+
+                using var connection = factory.CreateConnection();
+                using var channel = connection.CreateModel();
                 channel.QueueDeclare(queue: _options.QueueName, durable: true, exclusive: false, autoDelete: false);
                 var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload, _serializerOptions));
                 var props = channel.CreateBasicProperties();
