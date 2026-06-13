@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { GraduationCap, KeyRound, Plus, Search } from "lucide-react";
 import api from "@/api/client";
 import { toast } from "react-hot-toast";
 
@@ -121,10 +122,13 @@ export default function ClassroomsPage() {
     <div className="py-4 md:py-6">
       <div className="mx-auto max-w-7xl px-4">
         {/* Toolbar */}
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-4 md:p-5 mb-6">
+        <div className="rounded-xl border border-gray-200/80 dark:border-gray-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur p-4 md:p-5 mb-6 shadow-[0_10px_30px_-20px_rgba(15,23,42,0.35)]">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:ring-blue-700/40">📚</div>
+              <div className="relative grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-indigo-50 via-sky-50 to-white text-indigo-700 ring-1 ring-indigo-200/80 shadow-sm dark:from-indigo-950/60 dark:via-slate-900 dark:to-slate-950 dark:text-indigo-300 dark:ring-indigo-500/20">
+                <GraduationCap className="h-6 w-6" strokeWidth={2.1} />
+                <span className="absolute -right-1 -bottom-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-950" />
+              </div>
               <div className="min-w-0">
                 <h1 className="text-xl md:text-2xl font-semibold leading-tight">Lớp học của tôi</h1>
                 <div className="text-xs text-gray-500">Quản lý lớp học bạn dạy và tham gia</div>
@@ -132,25 +136,32 @@ export default function ClassroomsPage() {
             </div>
             <div className="flex-1 flex items-center gap-2 md:gap-3 md:justify-end">
               <div className="relative flex-1 md:flex-none md:w-72">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Tìm theo tên, mô tả, mã mời"
-                  className="w-full rounded-full bg-gray-100 dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 pl-4 pr-3 py-2 text-sm outline-none focus:border-gray-300"
+                  className="w-full rounded-full border border-gray-200 bg-gray-50/90 py-2 pl-10 pr-4 text-sm outline-none transition focus:border-indigo-300 focus:bg-white dark:border-gray-800 dark:bg-zinc-900/80 dark:focus:bg-zinc-950"
                 />
               </div>
               <div className="hidden md:block w-px h-8 bg-gray-200 dark:bg-gray-800" />
               <button
                 onClick={() => setShowJoin(true)}
-                className="rounded-full border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="group inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:-translate-y-px hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 dark:border-gray-700 dark:bg-zinc-950 dark:text-gray-200 dark:hover:border-amber-500/40 dark:hover:bg-amber-500/10 dark:hover:text-amber-300"
               >
-                🔑 Tham gia lớp
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-amber-100 text-amber-600 transition group-hover:bg-amber-200/80 dark:bg-amber-500/15 dark:text-amber-300">
+                  <KeyRound className="h-4 w-4" />
+                </span>
+                <span>Tham gia lớp</span>
               </button>
               <button
                 onClick={() => setShowCreate(true)}
-                className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm"
+                className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:-translate-y-px hover:shadow-md hover:shadow-indigo-500/20"
               >
-                ➕ Tạo lớp
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 text-white transition group-hover:bg-white/20">
+                  <Plus className="h-4 w-4" />
+                </span>
+                <span>Tạo lớp</span>
               </button>
             </div>
           </div>
@@ -206,7 +217,9 @@ export default function ClassroomsPage() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12">
-              <div className="mx-auto w-14 h-14 grid place-items-center rounded-full bg-gray-100 dark:bg-zinc-800 text-2xl">🗂️</div>
+              <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gray-100 text-gray-500 dark:bg-zinc-800">
+                <GraduationCap className="h-7 w-7" />
+              </div>
               <div className="mt-3 font-medium">Không có lớp phù hợp</div>
               <div className="text-sm text-gray-500">Hãy đổi bộ lọc hoặc tạo lớp mới</div>
               <div className="mt-4 flex justify-center gap-2">

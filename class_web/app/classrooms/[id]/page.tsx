@@ -21,6 +21,22 @@ import ClassroomTabMenu, { type TabItem } from "@/components/classrooms/detail/C
 import GradesTable from "@/components/classrooms/detail/GradesTable";
 import MeetingPanel from "@/components/classrooms/detail/MeetingPanel";
 
+type AssignmentReuseDraft = {
+  sourceId: string;
+  title: string;
+  instructions?: string | null;
+  dueAt?: string | null;
+  maxPoints?: number;
+  allowedFileTypes?: string | null;
+  maxFileSizeMb?: number | "";
+  groupEnabled?: boolean;
+  groupMinMembers?: number | "";
+  groupMaxMembers?: number | "";
+  groupMode?: "student" | "random";
+  assignmentType?: string;
+  materials?: any[];
+};
+
 export default function ClassroomDetailPage() {
   const params = useParams();
   const classroomId = params?.id as string;
@@ -34,6 +50,7 @@ export default function ClassroomDetailPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [announceDraft, setAnnounceDraft] = useState<{ sourceId: string; content: string; materials?: any[]; copyAttachments?: boolean } | null>(null);
+  const [assignmentDraft, setAssignmentDraft] = useState<AssignmentReuseDraft | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [changingBanner, setChangingBanner] = useState(false);
   const [updatingInviteVisibility, setUpdatingInviteVisibility] = useState(false);
@@ -265,6 +282,55 @@ export default function ClassroomDetailPage() {
     }
   }
 
+  function resetAssignmentForm() {
+    setForm({
+      title: "",
+      instructions: "",
+      dueAt: "",
+      maxPoints: 100,
+      allowedFileTypes: "",
+      maxFileSizeMb: "",
+      groupEnabled: false,
+      groupMinMembers: 2,
+      groupMaxMembers: "",
+      groupMode: "random",
+    });
+    setAttachFiles([]);
+    setLinks([]);
+    setLinkInput("");
+    setAssignmentDraft(null);
+  }
+
+  function openAssignment() {
+    resetAssignmentForm();
+    setShowCreate(true);
+  }
+
+  function closeAssignment() {
+    setShowCreate(false);
+    setAssignmentDraft(null);
+  }
+
+  function handleReuseAssignment(draft: AssignmentReuseDraft) {
+    setAssignmentDraft(draft);
+    setAttachFiles([]);
+    setLinks([]);
+    setLinkInput("");
+    setForm({
+      title: draft.title || "",
+      instructions: draft.instructions || "",
+      dueAt: draft.dueAt ? new Date(draft.dueAt).toISOString().slice(0, 16) : "",
+      maxPoints: draft.maxPoints || 100,
+      allowedFileTypes: draft.allowedFileTypes || "",
+      maxFileSizeMb: draft.maxFileSizeMb ?? "",
+      groupEnabled: !!draft.groupEnabled,
+      groupMinMembers: draft.groupMinMembers ?? 2,
+      groupMaxMembers: draft.groupMaxMembers ?? "",
+      groupMode: draft.groupMode || "random",
+    });
+    setShowCreate(true);
+  }
+
   function openAnnouncement() {
     setAnnounceDraft(null);
     setShowAnnounce(true);
@@ -446,6 +512,12 @@ export default function ClassroomDetailPage() {
           GroupMinMembers: a.GroupMinMembers ?? a.groupMinMembers ?? null,
           GroupMaxMembers: a.GroupMaxMembers ?? a.groupMaxMembers ?? null,
           GroupMode: a.GroupMode ?? a.groupMode ?? "student",
+          AssignmentType: a.AssignmentType ?? a.assignmentType ?? "standard",
+          Status: a.Status ?? a.status ?? "published",
+          QuizTopic: a.QuizTopic ?? a.quizTopic ?? null,
+          QuizDifficulty: a.QuizDifficulty ?? a.quizDifficulty ?? null,
+          QuizQuestionCount: a.QuizQuestionCount ?? a.quizQuestionCount ?? null,
+          QuizTimeLimitMinutes: a.QuizTimeLimitMinutes ?? a.quizTimeLimitMinutes ?? null,
           CreatedAt: a.CreatedAt ?? a.createdAt,
           ClassroomId: a.ClassroomId ?? a.classroomId
         };
@@ -471,7 +543,13 @@ export default function ClassroomDetailPage() {
             GroupEnabled: a.GroupEnabled ?? a.groupEnabled ?? x.GroupEnabled ?? x.groupEnabled ?? false,
             GroupMinMembers: a.GroupMinMembers ?? a.groupMinMembers ?? x.GroupMinMembers ?? x.groupMinMembers ?? null,
             GroupMaxMembers: a.GroupMaxMembers ?? a.groupMaxMembers ?? x.GroupMaxMembers ?? x.groupMaxMembers ?? null,
-            GroupMode: a.GroupMode ?? a.groupMode ?? x.GroupMode ?? x.groupMode ?? "student"
+            GroupMode: a.GroupMode ?? a.groupMode ?? x.GroupMode ?? x.groupMode ?? "student",
+            AssignmentType: a.AssignmentType ?? a.assignmentType ?? x.AssignmentType ?? x.assignmentType ?? "standard",
+            Status: a.Status ?? a.status ?? x.Status ?? x.status ?? "published",
+            QuizTopic: a.QuizTopic ?? a.quizTopic ?? x.QuizTopic ?? x.quizTopic ?? null,
+            QuizDifficulty: a.QuizDifficulty ?? a.quizDifficulty ?? x.QuizDifficulty ?? x.quizDifficulty ?? null,
+            QuizQuestionCount: a.QuizQuestionCount ?? a.quizQuestionCount ?? x.QuizQuestionCount ?? x.quizQuestionCount ?? null,
+            QuizTimeLimitMinutes: a.QuizTimeLimitMinutes ?? a.quizTimeLimitMinutes ?? x.QuizTimeLimitMinutes ?? x.quizTimeLimitMinutes ?? null
           };
         });
         return { ...prev, Assignments: next, assignments: next };
@@ -530,6 +608,34 @@ export default function ClassroomDetailPage() {
     if (creating) return;
     try {
       setCreating(true);
+      if (assignmentDraft?.sourceId) {
+        const maxSizeMb = Number(form.maxFileSizeMb);
+        const minMembers = Number(form.groupMinMembers);
+        const maxMembers = Number(form.groupMaxMembers);
+        await api.post(`/assignments/${assignmentDraft.sourceId}/repost`, {
+          classroomIds: [String(classroomId)],
+          title: form.title.trim(),
+          instructions: form.instructions || "",
+          dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
+          maxPoints: Number(form.maxPoints) || 100,
+          allowedFileTypes: form.allowedFileTypes.trim(),
+          maxFileSizeMb: !Number.isNaN(maxSizeMb) && maxSizeMb > 0 ? maxSizeMb : 0,
+          groupEnabled: !!form.groupEnabled,
+          groupMinMembers: form.groupEnabled && !Number.isNaN(minMembers) && minMembers > 0 ? minMembers : null,
+          groupMaxMembers: form.groupEnabled && !Number.isNaN(maxMembers) && maxMembers > 0 ? maxMembers : null,
+          copyAttachments: true,
+        });
+
+        const title = form.title.trim();
+        setShowCreate(false);
+        toast.success("Đã đăng lại bài tập");
+        setFlash(`Đã đăng lại bài: ${title}`);
+        setTimeout(() => setFlash(""), 4000);
+        resetAssignmentForm();
+        refresh();
+        return;
+      }
+
       const hasUploads = attachFiles.length > 0 || links.length > 0;
       if (hasUploads) {
         const fd = new FormData();
@@ -575,21 +681,7 @@ export default function ClassroomDetailPage() {
       toast.success("Đã tạo bài tập");
       setFlash(`Đã giao bài: ${form.title.trim()}`);
       setTimeout(() => setFlash(""), 4000);
-      setForm({
-        title: "",
-        instructions: "",
-        dueAt: "",
-        maxPoints: 100,
-        allowedFileTypes: "",
-        maxFileSizeMb: "",
-        groupEnabled: false,
-        groupMinMembers: 2,
-        groupMaxMembers: "",
-        groupMode: "random",
-      });
-      setAttachFiles([]);
-      setLinks([]);
-      setLinkInput("");
+      resetAssignmentForm();
       refresh();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Tạo bài tập thất bại");
@@ -756,14 +848,16 @@ export default function ClassroomDetailPage() {
           </div>
         )}
         {activeTab === "assignments" && (
-          <AssignmentsCard
-            assignments={classroom.assignments || []}
-            submissions={mySubmissions}
-            isTeacher={isTeacher}
-            onCreate={() => setShowCreate(true)}
-            onEdit={startEdit}
-            onDelete={removeAssignment}
-          />
+            <AssignmentsCard
+              classroomId={String(classroomId)}
+              assignments={classroom.assignments || []}
+              submissions={mySubmissions}
+              isTeacher={isTeacher}
+              onCreate={openAssignment}
+              onReuse={handleReuseAssignment}
+              onEdit={startEdit}
+              onDelete={removeAssignment}
+            />
         )}
         {activeTab === "lectures" && (
           <LecturePanel
@@ -807,6 +901,8 @@ export default function ClassroomDetailPage() {
       <AssignmentCreateModal
         open={showCreate}
         creating={creating}
+        classroomId={String(classroomId)}
+        draft={assignmentDraft}
         form={form}
         setForm={setForm}
         attachFiles={attachFiles}
@@ -824,7 +920,8 @@ export default function ClassroomDetailPage() {
         onGenerateQuiz={generateQuizFromAI}
         onInsertQuiz={insertQuizToInstructions}
         onSubmit={createAssignment}
-        onClose={() => setShowCreate(false)}
+        onClose={closeAssignment}
+        onSaved={refresh}
       />
       <AssignmentEditModal
         editing={editing}

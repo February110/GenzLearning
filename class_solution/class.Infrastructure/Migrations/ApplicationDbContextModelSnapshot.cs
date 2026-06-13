@@ -152,6 +152,41 @@ namespace class_api.Migrations
                         .HasColumnType("int")
                         .HasDefaultValue(100);
 
+                    b.Property<string>("AssignmentType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("standard");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("QuizBlobKey")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("QuizDifficulty")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int?>("QuizQuestionCount")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("QuizTimeLimitMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("QuizTopic")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("published");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -502,8 +537,7 @@ namespace class_api.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("DurationSeconds")
                         .HasColumnType("int");
@@ -541,6 +575,96 @@ namespace class_api.Migrations
                         .IsUnique();
 
                     b.ToTable("LectureLessons");
+                });
+
+            modelBuilder.Entity("class_api.Domain.LectureLessonProgress", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("LessonId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("TextCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("TextDwellSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TextScrollPercent")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("VideoCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("VideoDurationSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<double>("VideoWatchedSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LessonId", "UserId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("LectureLessonProgresses");
+                });
+
+            modelBuilder.Entity("class_api.Domain.QuizSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AnswersJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("AssignmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CorrectCount")
+                        .HasColumnType("int");
+
+                    b.Property<double>("Score")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TotalQuestions")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId", "UserId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("QuizSubmissions");
                 });
 
             modelBuilder.Entity("class_api.Domain.LectureSection", b =>
@@ -1048,6 +1172,44 @@ namespace class_api.Migrations
                     b.Navigation("Section");
                 });
 
+            modelBuilder.Entity("class_api.Domain.LectureLessonProgress", b =>
+                {
+                    b.HasOne("class_api.Domain.LectureLesson", "Lesson")
+                        .WithMany()
+                        .HasForeignKey("LessonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("class_api.Domain.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Lesson");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("class_api.Domain.QuizSubmission", b =>
+                {
+                    b.HasOne("class_api.Domain.Assignment", "Assignment")
+                        .WithMany("QuizSubmissions")
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("class_api.Domain.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Assignment");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("class_api.Domain.LectureSection", b =>
                 {
                     b.HasOne("class_api.Domain.Classroom", "Classroom")
@@ -1147,6 +1309,8 @@ namespace class_api.Migrations
                     b.Navigation("Grades");
 
                     b.Navigation("Groups");
+
+                    b.Navigation("QuizSubmissions");
 
                     b.Navigation("Submissions");
                 });

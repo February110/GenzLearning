@@ -10,7 +10,7 @@ namespace class_api.Infrastructure.Configurations
         {
             builder.HasKey(x => x.Id);
             builder.Property(x => x.Title).HasMaxLength(200).IsRequired();
-            builder.Property(x => x.Description).HasMaxLength(4000);
+            builder.Property(x => x.Description).HasColumnType("nvarchar(max)");
             builder.Property(x => x.OrderIndex).IsRequired();
             builder.Property(x => x.VideoKey).HasMaxLength(500);
             builder.Property(x => x.VideoName).HasMaxLength(255);

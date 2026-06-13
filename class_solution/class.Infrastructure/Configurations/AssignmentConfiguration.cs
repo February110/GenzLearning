@@ -13,6 +13,11 @@ namespace class_api.Infrastructure.Configurations
             builder.Property(a => a.MaxPoints).HasDefaultValue(100);
             builder.Property(a => a.CreatedAt).IsRequired();
             builder.Property(a => a.UpdatedAt).IsRequired();
+            builder.Property(a => a.AssignmentType).HasMaxLength(32).HasDefaultValue("standard");
+            builder.Property(a => a.Status).HasMaxLength(32).HasDefaultValue("published");
+            builder.Property(a => a.QuizBlobKey).HasMaxLength(500);
+            builder.Property(a => a.QuizTopic).HasMaxLength(200);
+            builder.Property(a => a.QuizDifficulty).HasMaxLength(64);
             builder.Property(a => a.GroupEnabled).HasDefaultValue(false);
             builder.Property(a => a.GroupMode).HasMaxLength(16).HasDefaultValue("student");
 

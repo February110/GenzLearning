@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, BookOpen, ChevronDown, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, CheckCircle2, ChevronDown, FileText, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import api from "@/api/client";
 import Card from "@/components/ui/Card";
 import { normalizeLectureTree, type LectureSection } from "@/lib/lectures";
@@ -129,14 +129,10 @@ export default function LecturePanel({ classroomId, isTeacher = false }: Lecture
 
     try {
       setBusy(true);
-      const { data } = await api.post(`/classrooms/${classroomId}/lectures/sections/${sectionId}/lessons`, { title });
-      const createdLessonId = String(data?.id ?? data?.Id ?? "");
+      await api.post(`/classrooms/${classroomId}/lectures/sections/${sectionId}/lessons`, { title });
       setLessonTitle((prev) => ({ ...prev, [sectionId]: "" }));
       toast.success("Đã thêm bài học.");
       await load();
-      if (createdLessonId) {
-        router.push(`/classrooms/${classroomId}/lectures/${createdLessonId}`);
-      }
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Thêm bài học thất bại.");
     } finally {
@@ -266,7 +262,7 @@ export default function LecturePanel({ classroomId, isTeacher = false }: Lecture
                       }}
                       className="flex min-w-0 flex-1 items-center gap-3 text-left"
                     >
-                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-300">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-slate-50 via-white to-white text-slate-700 ring-1 ring-slate-200/80 shadow-sm dark:from-slate-900 dark:via-slate-950 dark:to-black dark:text-slate-300 dark:ring-slate-700/80">
                         <BookOpen className="h-4 w-4" />
                       </div>
 
@@ -391,15 +387,26 @@ export default function LecturePanel({ classroomId, isTeacher = false }: Lecture
                             className="flex cursor-pointer flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-sky-200 hover:bg-sky-50/40 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-sky-900 dark:hover:bg-sky-950/20 sm:flex-row sm:items-center sm:justify-between"
                           >
                             <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
-                                <BookOpen className="h-4 w-4" />
+                              <div
+                                className={`grid h-8 w-8 shrink-0 place-items-center rounded-full shadow-sm ring-1 ${
+                                  lesson.isCompleted
+                                    ? "bg-emerald-50 text-emerald-600 ring-emerald-200/80 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900/70"
+                                    : "bg-slate-100 text-slate-500 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700/70"
+                                }`}
+                              >
+                                {lesson.isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                               </div>
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                                   {lesson.title}
                                 </div>
                                 <div className="mt-1 text-xs text-slate-500">
-                                  {lesson.videoKey ? "Có video nội dung" : "Chưa có video"} · Bấm để xem chi tiết
+                                  {lesson.isCompleted
+                                    ? "Đã hoàn thành"
+                                    : lesson.videoKey
+                                      ? "Có video nội dung"
+                                      : "Chưa có video"}{" "}
+                                  · Bấm để xem chi tiết
                                 </div>
                               </div>
                             </div>

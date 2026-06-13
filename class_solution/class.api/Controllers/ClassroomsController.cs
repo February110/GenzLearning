@@ -152,6 +152,7 @@ namespace class_api.Controllers
                 ClassGroupMode = c.ClassGroupMode,
                 Members = c.Enrollments.Select(e => new { e.UserId, e.User!.FullName, e.User!.Email, e.User!.Avatar, e.Role }),
                 Assignments = c.Assignments
+                    .Where(a => member.Role == "Teacher" || a.Status == "published")
                     .OrderByDescending(a => a.CreatedAt)
                     .Select(a => new
                     {
@@ -165,6 +166,12 @@ namespace class_api.Controllers
                         a.GroupMinMembers,
                         a.GroupMaxMembers,
                         a.GroupMode,
+                        a.AssignmentType,
+                        a.Status,
+                        a.QuizTopic,
+                        a.QuizDifficulty,
+                        a.QuizQuestionCount,
+                        a.QuizTimeLimitMinutes,
                         CreatedAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
                         Grades = a.Grades.Select(g => new
                         {

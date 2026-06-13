@@ -19,6 +19,7 @@ import api from "@/api/client";
 import { resolveAvatar } from "@/utils/resolveAvatar";
 import { getSignalR } from "@/lib/signalr";
 import CommentsPanel from "@/components/assignments/CommentsPanel";
+import QuizAssignmentView from "@/components/assignments/QuizAssignmentView";
 import { toast } from "react-hot-toast";
 import { openFileViewer, isLikelyFileUrl } from "@/utils/fileViewer";
 
@@ -944,6 +945,11 @@ export default function AssignmentDetailPage() {
 
   if (loading) return <div className="p-6"><div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-6">Đang tải...</div></div>;
   if (!assignment) return <div className="p-6"><div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 p-6">Không tìm thấy bài tập</div></div>;
+
+  const assignmentType = String(assignment.assignmentType ?? assignment.AssignmentType ?? "standard").toLowerCase();
+  if (assignmentType === "ai_quiz") {
+    return <QuizAssignmentView assignmentId={id} assignment={assignment} isTeacher={isTeacher} />;
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6">

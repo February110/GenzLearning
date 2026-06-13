@@ -84,6 +84,14 @@ namespace class_api.Controllers
             return mb.Value * 1024L * 1024L;
         }
 
+        private static DateTime? NormalizeUtc(DateTime? value)
+        {
+            if (!value.HasValue) return null;
+            return value.Value.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
+                : value.Value.ToUniversalTime();
+        }
+
         private static (int? min, int? max) NormalizeGroupSize(bool enabled, int? min, int? max)
         {
             if (!enabled) return (null, null);
@@ -104,6 +112,20 @@ namespace class_api.Controllers
         {
             return string.Equals(mode, "random", StringComparison.OrdinalIgnoreCase) ? "random" : "student";
         }
+
+        public record RepostAssignmentDto(
+            Guid[] ClassroomIds,
+            string? Title = null,
+            string? Instructions = null,
+            DateTime? DueAt = null,
+            int? MaxPoints = null,
+            string? AllowedFileTypes = null,
+            int? MaxFileSizeMb = null,
+            bool? GroupEnabled = null,
+            int? GroupMinMembers = null,
+            int? GroupMaxMembers = null,
+            bool? CopyAttachments = null
+        );
 
         [HttpPost]
         [Consumes("application/json")]
@@ -134,6 +156,9 @@ namespace class_api.Controllers
                 GroupMinMembers = minMembers,
                 GroupMaxMembers = maxMembers,
                 GroupMode = groupMode,
+                AssignmentType = "standard",
+                Status = "published",
+                PublishedAt = DateTime.UtcNow,
                 CreatedBy = _me.UserId
             };
             _db.Assignments.Add(a);
@@ -231,6 +256,9 @@ namespace class_api.Controllers
                 GroupMinMembers = minMembers2,
                 GroupMaxMembers = maxMembers2,
                 GroupMode = groupMode2,
+                AssignmentType = "standard",
+                Status = "published",
+                PublishedAt = DateTime.UtcNow,
                 CreatedBy = _me.UserId
             };
             _db.Assignments.Add(a);
@@ -318,6 +346,290 @@ namespace class_api.Controllers
             return CreatedAtAction(nameof(GetById), new { id = a.Id }, new { a.Id, a.Title, a.DueAt, a.MaxPoints, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers, a.GroupMode });
         }
 
+        [HttpPost("save-ai-quiz")]
+        [Consumes("application/json")]
+        public async Task<IActionResult> SaveAiQuiz([FromBody] SaveAiQuizRequest request, CancellationToken ct)
+        {
+            var classroomId = request.ClassroomId ?? request.ClassId ?? Guid.Empty;
+            if (classroomId == Guid.Empty)
+                return BadRequest(new { message = "Thiếu lớp học được giao." });
+
+            var member = await _db.Enrollments
+                .Include(e => e.User)
+                .Include(e => e.Classroom)
+                .FirstOrDefaultAsync(e => e.ClassroomId == classroomId && e.UserId == _me.UserId, ct);
+
+            if (member == null || member.Role != "Teacher") return Forbid();
+
+            var quizData = request.QuizData ?? new QuizDataDto();
+            if (!string.IsNullOrWhiteSpace(request.Title))
+                quizData.Title = request.Title.Trim();
+            QuizService.NormalizeQuiz(quizData);
+
+            var validationErrors = QuizService.ValidateQuiz(quizData, quizData.QuestionCount > 0 ? quizData.QuestionCount : null, 4);
+            if (validationErrors.Count > 0)
+                return BadRequest(new { message = "Dữ liệu bài trắc nghiệm không hợp lệ", errors = validationErrors });
+
+            var assignmentId = Guid.NewGuid();
+            quizData.AssignmentId = assignmentId;
+            var blobName = $"assignments/{assignmentId}/quiz.json";
+            var now = DateTime.UtcNow;
+            var status = request.Publish ? "published" : "draft";
+
+            var assignment = new Assignment
+            {
+                Id = assignmentId,
+                ClassroomId = classroomId,
+                Title = quizData.Title,
+                Instructions = $"Bài trắc nghiệm: {quizData.Topic}",
+                DueAt = request.DueAt.HasValue
+                    ? DateTime.SpecifyKind(request.DueAt.Value, DateTimeKind.Utc)
+                    : null,
+                MaxPoints = request.MaxPoints.GetValueOrDefault(10) <= 0 ? 10 : request.MaxPoints.GetValueOrDefault(10),
+                AssignmentType = "ai_quiz",
+                Status = status,
+                QuizBlobKey = blobName,
+                QuizTopic = quizData.Topic,
+                QuizDifficulty = quizData.Difficulty,
+                QuizQuestionCount = quizData.Questions.Count,
+                QuizTimeLimitMinutes = request.TimeLimitMinutes.HasValue && request.TimeLimitMinutes.Value > 0
+                    ? request.TimeLimitMinutes.Value
+                    : null,
+                PublishedAt = request.Publish ? now : null,
+                CreatedAt = now,
+                UpdatedAt = now,
+                CreatedBy = _me.UserId
+            };
+
+            await _storage.UploadTextAsync(blobName, QuizService.ToJson(quizData), "application/json", ct);
+            _db.Assignments.Add(assignment);
+            await _db.SaveChangesAsync(ct);
+
+            if (request.Publish)
+                await NotifyAssignmentPublished(assignment, member, ct);
+
+            return Ok(new
+            {
+                message = "Lưu bài tập thành công",
+                data = new
+                {
+                    assignmentId = assignment.Id,
+                    assignment.Title,
+                    assignment.Status,
+                    blobName = assignment.QuizBlobKey
+                }
+            });
+        }
+
+        [HttpPost("{id:guid}/publish")]
+        public async Task<IActionResult> Publish(Guid id, CancellationToken ct)
+        {
+            var assignment = await _db.Assignments
+                .Include(a => a.Classroom)
+                .FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (assignment == null) return NotFound(new { message = "Không tìm thấy bài tập." });
+
+            var member = await _db.Enrollments
+                .Include(e => e.User)
+                .Include(e => e.Classroom)
+                .FirstOrDefaultAsync(e => e.ClassroomId == assignment.ClassroomId && e.UserId == _me.UserId, ct);
+            if (member == null || member.Role != "Teacher") return Forbid();
+
+            if (string.Equals(assignment.Status, "published", StringComparison.OrdinalIgnoreCase))
+                return Ok(new { message = "Bài tập đã được giao.", data = new { assignment.Id, assignment.Status } });
+
+            assignment.Status = "published";
+            assignment.PublishedAt = DateTime.UtcNow;
+            assignment.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            await NotifyAssignmentPublished(assignment, member, ct);
+
+            return Ok(new { message = "Đã giao bài tập.", data = new { assignment.Id, assignment.Status } });
+        }
+
+        [HttpPost("{id:guid}/repost")]
+        public async Task<IActionResult> Repost(Guid id, RepostAssignmentDto dto, CancellationToken ct)
+        {
+            if (dto.ClassroomIds == null || dto.ClassroomIds.Length == 0)
+                return BadRequest(new { message = "Chọn lớp để đăng lại." });
+
+            var source = await _db.Assignments
+                .Include(a => a.Classroom)
+                .FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (source == null) return NotFound(new { message = "Không tìm thấy bài tập." });
+
+            var sourceMember = await _db.Enrollments
+                .Include(e => e.User)
+                .Include(e => e.Classroom)
+                .FirstOrDefaultAsync(e => e.ClassroomId == source.ClassroomId && e.UserId == _me.UserId, ct);
+            if (sourceMember == null || !string.Equals(sourceMember.Role, "Teacher", StringComparison.OrdinalIgnoreCase))
+                return Forbid();
+
+            var targetClassroomIds = dto.ClassroomIds
+                .Where(x => x != source.ClassroomId)
+                .Distinct()
+                .ToList();
+            if (targetClassroomIds.Count == 0)
+                return BadRequest(new { message = "Không có lớp hợp lệ để đăng lại." });
+
+            var teacherTargets = await _db.Enrollments
+                .Include(e => e.Classroom)
+                .Where(e => targetClassroomIds.Contains(e.ClassroomId) && e.UserId == _me.UserId && e.Role == "Teacher")
+                .Select(e => new { e.ClassroomId, Classroom = e.Classroom!, e.User })
+                .ToListAsync(ct);
+
+            if (teacherTargets.Count == 0) return Forbid();
+
+            var allowedIds = teacherTargets.Select(x => x.ClassroomId).ToHashSet();
+            var skipped = new List<object>();
+            foreach (var cid in dto.ClassroomIds.Distinct())
+            {
+                if (cid == source.ClassroomId)
+                    skipped.Add(new { classroomId = cid, reason = "same-class" });
+                else if (!allowedIds.Contains(cid))
+                    skipped.Add(new { classroomId = cid, reason = "not-teacher" });
+            }
+
+            var sourceClassroom = source.Classroom ?? await _db.Classrooms.FirstOrDefaultAsync(c => c.Id == source.ClassroomId, ct);
+            var (sourceFiles, sourceLinks) = await ListAssignmentMaterialSources(source, sourceClassroom ?? new Classroom { Id = source.ClassroomId, Name = "untitled" }, ct);
+
+            if (dto.CopyAttachments == false && (sourceFiles.Count > 0 || sourceLinks.Count > 0))
+                return BadRequest(new { message = "Đăng lại bài tập hiện chỉ hỗ trợ sao chép tệp đính kèm." });
+
+            var created = new List<object>();
+            var creatorName = sourceMember.User?.FullName ?? "Giáo viên";
+            var title = string.IsNullOrWhiteSpace(dto.Title) ? source.Title : dto.Title.Trim();
+            var instructions = dto.Instructions is null ? source.Instructions : dto.Instructions;
+            var dueAt = NormalizeUtc(dto.DueAt);
+            var maxPoints = dto.MaxPoints.HasValue && dto.MaxPoints.Value > 0 ? dto.MaxPoints.Value : source.MaxPoints;
+            var allowedFileTypes = dto.AllowedFileTypes is null
+                ? source.AllowedFileTypes
+                : FileTypeRules.NormalizeAllowedTypes(dto.AllowedFileTypes);
+            var maxFileSizeBytes = dto.MaxFileSizeMb.HasValue ? ToBytes(dto.MaxFileSizeMb) : source.MaxFileSizeBytes;
+            var groupEnabled = dto.GroupEnabled ?? source.GroupEnabled;
+            var requestedMinMembers = dto.GroupMinMembers ?? source.GroupMinMembers;
+            var requestedMaxMembers = dto.GroupMaxMembers ?? source.GroupMaxMembers;
+
+            foreach (var target in teacherTargets)
+            {
+                var targetClassroom = target.Classroom ?? new Classroom { Id = target.ClassroomId, Name = "untitled" };
+                var (minMembers, maxMembers) = NormalizeGroupSize(groupEnabled, requestedMinMembers, requestedMaxMembers);
+                var groupMode = groupEnabled ? NormalizeClassGroupMode(targetClassroom.ClassGroupMode) : null;
+                var now = DateTime.UtcNow;
+                var newAssignment = new Assignment
+                {
+                    ClassroomId = target.ClassroomId,
+                    Title = title,
+                    Instructions = instructions,
+                    DueAt = dueAt,
+                    MaxPoints = maxPoints,
+                    AllowedFileTypes = allowedFileTypes,
+                    MaxFileSizeBytes = maxFileSizeBytes,
+                    GroupEnabled = groupEnabled,
+                    GroupMinMembers = minMembers,
+                    GroupMaxMembers = maxMembers,
+                    GroupMode = groupMode,
+                    AssignmentType = source.AssignmentType,
+                    Status = "published",
+                    PublishedAt = now,
+                    CreatedBy = _me.UserId
+                };
+
+                if (string.Equals(source.AssignmentType, "ai_quiz", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(source.QuizBlobKey))
+                {
+                    var quizJson = await _storage.ReadTextAsync(source.QuizBlobKey, ct);
+                    if (string.IsNullOrWhiteSpace(quizJson))
+                        return BadRequest(new { message = "Không tìm thấy dữ liệu trắc nghiệm của bài tập gốc." });
+
+                    var quiz = JsonSerializer.Deserialize<QuizDataDto>(
+                        quizJson,
+                        new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                        {
+                            PropertyNameCaseInsensitive = true
+                        }) ?? new QuizDataDto();
+
+                    QuizService.NormalizeQuiz(quiz);
+                    quiz.AssignmentId = newAssignment.Id;
+                    quiz.Title = newAssignment.Title;
+
+                    var blobName = $"assignments/{newAssignment.Id}/quiz.json";
+                    await _storage.UploadTextAsync(blobName, QuizService.ToJson(quiz), "application/json", ct);
+                    newAssignment.QuizBlobKey = blobName;
+                    newAssignment.QuizTopic = quiz.Topic;
+                    newAssignment.QuizDifficulty = quiz.Difficulty;
+                    newAssignment.QuizQuestionCount = quiz.Questions.Count;
+                    newAssignment.QuizTimeLimitMinutes = source.QuizTimeLimitMinutes;
+                }
+                else
+                {
+                    newAssignment.AssignmentType = "standard";
+                }
+
+                _db.Assignments.Add(newAssignment);
+                await _db.SaveChangesAsync(ct);
+
+                if (newAssignment.GroupEnabled)
+                {
+                    await CreateGroupsFromClassroom(newAssignment.Id, newAssignment.ClassroomId, ct);
+                }
+
+                var prefix = BuildAssignmentTimestampPrefix(newAssignment, targetClassroom);
+                var items = new List<object>();
+                string? firstKey = null;
+
+                foreach (var f in sourceFiles)
+                {
+                    var (key, size) = await _storage.CopyAsync(f.key, prefix, f.name, ct);
+                    if (string.IsNullOrWhiteSpace(key) || size <= 0) continue;
+                    items.Add(new { key, size, name = f.name, url = _storage.GetTemporaryUrl(key) });
+                    firstKey ??= key;
+                }
+
+                if (sourceLinks.Count > 0)
+                {
+                    var json = JsonSerializer.Serialize(sourceLinks);
+                    await _storage.UploadTextAsync($"{prefix}/links.json", json, "application/json", ct);
+                    items.AddRange(sourceLinks.Select((u, idx) => new { key = $"link-{idx}", size = 0L, url = u ?? string.Empty, name = u ?? string.Empty }));
+                }
+
+                if (firstKey != null)
+                {
+                    newAssignment.FileKey = firstKey;
+                    newAssignment.ContentType = source.ContentType;
+                    await _db.SaveChangesAsync(ct);
+                }
+
+                var payload = BuildAssignmentPayload(newAssignment, items);
+                await _hub.Clients.Group(newAssignment.ClassroomId.ToString()).SendAsync("AssignmentCreated", payload, ct);
+
+                await _activityStream.PublishAsync(new ActivityEvent("assignment",
+                    creatorName,
+                    $"tạo bài tập \"{newAssignment.Title}\"",
+                    targetClassroom.Name,
+                    DateTime.UtcNow));
+
+                var studentIds = await GetStudentIds(newAssignment.ClassroomId);
+                if (studentIds.Any())
+                {
+                    try
+                    {
+                        await _dispatcher.DispatchAsync(studentIds, "Bài tập mới", $"\"{newAssignment.Title}\" vừa được đăng.", "assignment", newAssignment.ClassroomId, newAssignment.Id, null, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"⚠️ Dispatch assignment notification failed: {ex.Message}");
+                        await _notifications.NotifyUsersAsync(studentIds, "Bài tập mới", $"\"{newAssignment.Title}\" vừa được đăng.", "assignment", newAssignment.ClassroomId, newAssignment.Id, null, ct);
+                    }
+                }
+
+                created.Add(payload);
+            }
+
+            return Ok(new { created, skipped });
+        }
+
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(Guid id)
         {
@@ -328,7 +640,27 @@ namespace class_api.Controllers
             if (member == null) return Forbid();
 
             var due = a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null;
-            return Ok(new { a.Id, a.Title, a.Instructions, DueAt = due, a.MaxPoints, a.ClassroomId, a.AllowedFileTypes, a.MaxFileSizeBytes, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers, a.GroupMode });
+            return Ok(new
+            {
+                a.Id,
+                a.Title,
+                a.Instructions,
+                DueAt = due,
+                a.MaxPoints,
+                a.ClassroomId,
+                a.AllowedFileTypes,
+                a.MaxFileSizeBytes,
+                a.GroupEnabled,
+                a.GroupMinMembers,
+                a.GroupMaxMembers,
+                a.GroupMode,
+                a.AssignmentType,
+                a.Status,
+                a.QuizTopic,
+                a.QuizDifficulty,
+                a.QuizQuestionCount,
+                a.QuizTimeLimitMinutes
+            });
         }
 
         [HttpGet("classroom/{classroomId:guid}")]
@@ -339,8 +671,25 @@ namespace class_api.Controllers
 
             var list = await _db.Assignments
                 .Where(a => a.ClassroomId == classroomId)
+                .Where(a => member.Role == "Teacher" || a.Status == "published")
                 .OrderByDescending(a => a.CreatedAt)
-                .Select(a => new { a.Id, a.Title, DueAt = (DateTime?)(a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : null), a.MaxPoints, a.GroupEnabled, a.GroupMinMembers, a.GroupMaxMembers, a.GroupMode })
+                .Select(a => new
+                {
+                    a.Id,
+                    a.Title,
+                    DueAt = (DateTime?)(a.DueAt.HasValue ? DateTime.SpecifyKind(a.DueAt.Value, DateTimeKind.Utc) : null),
+                    a.MaxPoints,
+                    a.GroupEnabled,
+                    a.GroupMinMembers,
+                    a.GroupMaxMembers,
+                    a.GroupMode,
+                    a.AssignmentType,
+                    a.Status,
+                    a.QuizTopic,
+                    a.QuizDifficulty,
+                    a.QuizQuestionCount,
+                    a.QuizTimeLimitMinutes
+                })
                 .ToListAsync();
 
             return Ok(list);
@@ -513,6 +862,79 @@ namespace class_api.Controllers
                 .ToListAsync();
         }
 
+        private static object BuildAssignmentPayload(Assignment assignment, List<object>? materials = null)
+        {
+            return new
+            {
+                id = assignment.Id,
+                classroomId = assignment.ClassroomId,
+                title = assignment.Title,
+                instructions = assignment.Instructions,
+                fileKey = assignment.FileKey,
+                contentType = assignment.ContentType,
+                dueAt = assignment.DueAt.HasValue ? DateTime.SpecifyKind(assignment.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null,
+                maxPoints = assignment.MaxPoints,
+                allowedFileTypes = assignment.AllowedFileTypes,
+                maxFileSizeBytes = assignment.MaxFileSizeBytes,
+                groupEnabled = assignment.GroupEnabled,
+                groupMinMembers = assignment.GroupMinMembers,
+                groupMaxMembers = assignment.GroupMaxMembers,
+                groupMode = assignment.GroupMode,
+                assignmentType = assignment.AssignmentType,
+                status = assignment.Status,
+                quizTopic = assignment.QuizTopic,
+                quizDifficulty = assignment.QuizDifficulty,
+                quizQuestionCount = assignment.QuizQuestionCount,
+                quizTimeLimitMinutes = assignment.QuizTimeLimitMinutes,
+                createdAt = DateTime.SpecifyKind(assignment.CreatedAt, DateTimeKind.Utc),
+                materials = materials ?? new List<object>()
+            };
+        }
+
+        private async Task<(List<(string key, long size, string name)> files, List<string> links)> ListAssignmentMaterialSources(Assignment assignment, Classroom classroom, CancellationToken ct)
+        {
+            var files = new Dictionary<string, (string key, long size, string name)>(StringComparer.OrdinalIgnoreCase);
+            var links = new List<string>();
+            var linkSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            async Task LoadPrefix(string prefix)
+            {
+                var blobs = await _storage.ListAsync(prefix, ct);
+                foreach (var blob in blobs.Where(b => !b.key.EndsWith("links.json", StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (!files.ContainsKey(blob.key))
+                    {
+                        files[blob.key] = (blob.key, blob.sizeBytes, System.IO.Path.GetFileName(blob.key));
+                    }
+                }
+
+                var linkJson = await _storage.ReadTextAsync($"{prefix}/links.json", ct);
+                if (string.IsNullOrWhiteSpace(linkJson)) return;
+
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<List<string>>(linkJson) ?? new List<string>();
+                    foreach (var link in parsed.Where(x => !string.IsNullOrWhiteSpace(x)))
+                    {
+                        if (linkSet.Add(link))
+                            links.Add(link);
+                    }
+                }
+                catch { }
+            }
+
+            await LoadPrefix(BuildAssignmentTimestampPrefix(assignment, classroom));
+            await LoadPrefix(BuildAssignmentPrefix(assignment, classroom));
+            await LoadPrefix(BuildAssignmentPrefix6(assignment, classroom));
+
+            if (files.Count == 0 && !string.IsNullOrWhiteSpace(assignment.FileKey))
+            {
+                files[assignment.FileKey!] = (assignment.FileKey!, 0L, System.IO.Path.GetFileName(assignment.FileKey!));
+            }
+
+            return (files.Values.ToList(), links);
+        }
+
         private async Task LoadAssignmentMaterials(List<object> items, string prefix, CancellationToken ct)
         {
             var blobs = await _storage.ListAsync(prefix, ct);
@@ -532,6 +954,51 @@ namespace class_api.Controllers
                     items.AddRange(linkItems);
                 }
                 catch { }
+            }
+        }
+
+        private async Task NotifyAssignmentPublished(Assignment assignment, Enrollment member, CancellationToken ct)
+        {
+            await _hub.Clients.Group(assignment.ClassroomId.ToString()).SendAsync("AssignmentCreated", new
+            {
+                assignment.Id,
+                assignment.ClassroomId,
+                assignment.Title,
+                DueAt = assignment.DueAt.HasValue ? DateTime.SpecifyKind(assignment.DueAt.Value, DateTimeKind.Utc) : (DateTime?)null,
+                assignment.MaxPoints,
+                assignment.AllowedFileTypes,
+                assignment.MaxFileSizeBytes,
+                assignment.GroupEnabled,
+                assignment.GroupMinMembers,
+                assignment.GroupMaxMembers,
+                assignment.GroupMode,
+                assignment.AssignmentType,
+                assignment.Status,
+                assignment.QuizTopic,
+                assignment.QuizDifficulty,
+                assignment.QuizQuestionCount,
+                assignment.QuizTimeLimitMinutes,
+                CreatedAt = DateTime.SpecifyKind(assignment.CreatedAt, DateTimeKind.Utc)
+            }, ct);
+
+            await _activityStream.PublishAsync(new ActivityEvent("assignment",
+                member.User?.FullName ?? "Giáo viên",
+                $"giao bài tập \"{assignment.Title}\"",
+                member.Classroom?.Name ?? string.Empty,
+                DateTime.UtcNow));
+
+            var studentIds = await GetStudentIds(assignment.ClassroomId);
+            if (studentIds.Any())
+            {
+                try
+                {
+                    await _dispatcher.DispatchAsync(studentIds, "Bài tập mới", $"\"{assignment.Title}\" vừa được đăng.", "assignment", assignment.ClassroomId, assignment.Id, null, ct);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Dispatch assignment notification failed: {ex.Message}");
+                    await _notifications.NotifyUsersAsync(studentIds, "Bài tập mới", $"\"{assignment.Title}\" vừa được đăng.", "assignment", assignment.ClassroomId, assignment.Id, null, ct);
+                }
             }
         }
 

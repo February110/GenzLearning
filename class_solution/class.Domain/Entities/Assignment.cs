@@ -19,6 +19,15 @@ namespace class_api.Domain
         public string? AllowedFileTypes { get; set; }
         public long? MaxFileSizeBytes { get; set; }
 
+        public string AssignmentType { get; set; } = "standard";
+        public string Status { get; set; } = "published";
+        public string? QuizBlobKey { get; set; }
+        public string? QuizTopic { get; set; }
+        public string? QuizDifficulty { get; set; }
+        public int? QuizQuestionCount { get; set; }
+        public int? QuizTimeLimitMinutes { get; set; }
+        public DateTime? PublishedAt { get; set; }
+
         public bool GroupEnabled { get; set; } = false;
         public int? GroupMinMembers { get; set; }
         public int? GroupMaxMembers { get; set; }
@@ -31,6 +40,7 @@ namespace class_api.Domain
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public ICollection<Submission> Submissions { get; set; } = new List<Submission>();
+        public ICollection<QuizSubmission> QuizSubmissions { get; set; } = new List<QuizSubmission>();
         public ICollection<Grade> Grades { get; set; } = new List<Grade>();
         public ICollection<AssignmentGroup> Groups { get; set; } = new List<AssignmentGroup>();
     }

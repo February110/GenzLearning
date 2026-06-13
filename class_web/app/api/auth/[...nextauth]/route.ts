@@ -7,13 +7,13 @@ const API_BASE = process.env.API_INTERNAL_BASE_URL || process.env.NEXT_PUBLIC_AP
 
 const authOptions: NextAuthOptions = {
   providers: [
-    // 🟢 GOOGLE (đã ok)
+    // GOOGLE 
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
 
-    // 🔵 FACEBOOK (đã fix AccessDenied)
+    // FACEBOOK 
     FacebookProvider({
       clientId: process.env.FACEBOOK_CLIENT_ID!,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET!,

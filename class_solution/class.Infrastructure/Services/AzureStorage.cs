@@ -12,8 +12,10 @@ namespace class_api.Services
 
         public AzureStorage(IConfiguration cfg)
         {
-            var connStr = cfg["Azure:ConnectionString"];
-            var containerName = cfg["Azure:ContainerName"];
+            var connStr = cfg["Azure:ConnectionString"]
+                ?? Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING");
+            var containerName = cfg["Azure:ContainerName"]
+                ?? Environment.GetEnvironmentVariable("AZURE_BLOB_CONTAINER");
 
             _container = new BlobContainerClient(connStr, containerName);
 

@@ -14,7 +14,25 @@ import {
   Eraser as IconEraser,
 } from "lucide-react";
 
-export default function RichTextEditor({ value, onChange, placeholder, disabled }: { value: string; onChange: (html: string) => void; placeholder?: string; disabled?: boolean }) {
+type RichTextEditorProps = {
+  value: string;
+  onChange: (html: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+  toolbarClassName?: string;
+  editorClassName?: string;
+};
+
+export default function RichTextEditor({
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  className = "",
+  toolbarClassName = "",
+  editorClassName = "",
+}: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -83,8 +101,8 @@ export default function RichTextEditor({ value, onChange, placeholder, disabled 
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300">
+    <div className={`space-y-2 ${className}`.trim()}>
+      <div className={`flex flex-wrap items-center gap-1 text-sm text-gray-600 dark:text-gray-300 ${toolbarClassName}`.trim()}>
         <button type="button" aria-label="Đậm" title="Đậm" disabled={disabled} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 disabled:opacity-50" onClick={() => applyCmd('bold')}>
           <IconBold className="h-4 w-4" />
         </button>
@@ -124,7 +142,7 @@ export default function RichTextEditor({ value, onChange, placeholder, disabled 
         suppressContentEditableWarning
         onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
         data-placeholder={placeholder || ''}
-        className="w-full min-h-[120px] rounded-lg border px-3 py-2 text-sm bg-white dark:bg-zinc-950 focus:outline-none prose prose-sm dark:prose-invert"
+        className={`w-full min-h-[120px] rounded-lg border px-3 py-2 text-sm bg-white dark:bg-zinc-950 focus:outline-none prose prose-sm dark:prose-invert ${editorClassName}`.trim()}
         style={{ whiteSpace: 'pre-wrap' }}
       />
     </div>

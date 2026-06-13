@@ -19,11 +19,13 @@ namespace class_api.Infrastructure.Data
         public DbSet<AssignmentGroup> AssignmentGroups => Set<AssignmentGroup>();
         public DbSet<AssignmentGroupMember> AssignmentGroupMembers => Set<AssignmentGroupMember>();
         public DbSet<Submission> Submissions => Set<Submission>();
+        public DbSet<QuizSubmission> QuizSubmissions => Set<QuizSubmission>();
         public DbSet<Comment> Comments => Set<Comment>();
         public DbSet<Announcement> Announcements => Set<Announcement>();
         public DbSet<AnnouncementComment> AnnouncementComments => Set<AnnouncementComment>();
         public DbSet<LectureSection> LectureSections => Set<LectureSection>();
         public DbSet<LectureLesson> LectureLessons => Set<LectureLesson>();
+        public DbSet<LectureLessonProgress> LectureLessonProgresses => Set<LectureLessonProgress>();
         public DbSet<Grade> Grades => Set<Grade>();
         public DbSet<Meeting> Meetings => Set<Meeting>();
         public DbSet<MeetingParticipant> MeetingParticipants => Set<MeetingParticipant>();
